@@ -5,7 +5,7 @@ use socket2::{Socket, Domain, Type};
 use std::io::Read;
 use std::sync::mpsc;
 
-const APP_ID: &str = "github.niahex.nwidgets.launcher";
+const APP_ID: &str = "github.niahex.nlauncher";
 const LOCK_PATH: &str = "/tmp/nlauncher.sock";
 
 fn main() {
@@ -64,3 +64,4 @@ fn main() {
     // Nettoyer le fichier de socket en quittant.
     let _ = std::fs::remove_file(LOCK_PATH);
 }
+
