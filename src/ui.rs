@@ -1,6 +1,5 @@
 use gtk::{Application, ApplicationWindow, Box, Orientation, Entry, ListView, ScrolledWindow, SignalListItemFactory, Label, prelude::*, gio};
 use gtk4_layer_shell::{Layer, Edge, KeyboardMode, LayerShell};
-use crate::state::LauncherState;
 
 pub struct LauncherUi {
     pub window: ApplicationWindow,
@@ -10,7 +9,7 @@ pub struct LauncherUi {
     pub scrolled_window: ScrolledWindow,
 }
 
-pub fn build_ui(app: &Application, state: &LauncherState) -> LauncherUi {
+pub fn build_ui(app: &Application) -> LauncherUi {
     let window = ApplicationWindow::builder()
         .application(app)
         .css_classes(vec!["launcher"])
@@ -64,7 +63,7 @@ pub fn build_ui(app: &Application, state: &LauncherState) -> LauncherUi {
         label.set_text(&app_info.name());
     });
 
-    let list_view = ListView::new(Some(state.selection_model.clone()), Some(factory));
+    let list_view = ListView::new(None::<gtk::SingleSelection>, Some(factory));
 
     let scrolled_window = ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Never)

@@ -1,4 +1,4 @@
-use gtk::{prelude::*, Application, ApplicationWindow, Entry};
+use gtk::{prelude::*, Application, ApplicationWindow};
 use crate::state::LauncherState;
 use crate::ui::{LauncherUi, build_ui};
 use crate::events::connect_events;
@@ -11,22 +11,17 @@ pub struct Launcher {
 
 impl Launcher {
     pub fn new(app: &Application) -> Self {
-        let search_entry_for_state = Entry::new();
-        let search_entry_clone = search_entry_for_state.clone();
+        // 1. Construire l'UI sans dépendances
+        let ui = build_ui(app);
 
-        let mut state = LauncherState::new(move || {
-            search_entry_clone.text().to_string()
-        });
+        // 2. Créer l'état en utilisant les composants de l'UI
+        let state = {
+            let search_entry = ui.search_entry.clone();
+            LauncherState::new(move || search_entry.text().to_string())
+        };
 
-        let mut ui = build_ui(app, &state);
-
-        let real_search_entry = ui.search_entry.clone();
-        state = LauncherState::new(move || {
-            real_search_entry.text().to_string()
-        });
-        
+        // 3. Connecter l'UI et l'état
         ui.list_view.set_model(Some(&state.selection_model));
-
         connect_events(&ui, &state);
 
         Self {
@@ -37,7 +32,7 @@ impl Launcher {
     }
 
     pub fn init(&self) {
-        // UI is already initialized in build_ui
+        // L'initialisation est déjà faite dans `new`
     }
 
     pub fn show(&self) {
