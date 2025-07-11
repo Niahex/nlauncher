@@ -15,10 +15,10 @@ pub fn connect_events(ui: &LauncherUi, state: &LauncherState, app: &Application)
         });
     });
 
-    let window = ui.window.clone();
-    let selection_model = state.selection_model.clone();
+    let app_clone = app.clone();
+    let selection_model_clone = state.selection_model.clone();
     ui.search_entry.connect_activate(move |_| {
-        launch_selected_app(&window, &selection_model);
+        launch_selected_app(&app_clone, &selection_model_clone);
     });
 
     let key_controller = EventControllerKey::new();
@@ -68,12 +68,12 @@ fn navigate_list(selection_model: &SingleSelection, list_view: &ListView, direct
     list_view.scroll_to(next_pos, gtk::ListScrollFlags::SELECT, None);
 }
 
-pub fn launch_selected_app(window: &ApplicationWindow, selection_model: &SingleSelection) -> bool {
+pub fn launch_selected_app(app: &Application, selection_model: &SingleSelection) -> bool {
     if let Some(selected_item) = selection_model.selected_item() {
         if let Some(app_info) = selected_item.downcast_ref::<gio::AppInfo>() {
             match app_info.launch(&[], gio::AppLaunchContext::NONE) {
                 Ok(_) => {
-                    window.set_visible(false);
+                    app.quit();
                     return true;
                 },
                 Err(e) => {
