@@ -1,4 +1,4 @@
-use gtk::{prelude::*, glib, gio, Application, ApplicationWindow, SingleSelection, EventControllerKey, gdk, ListView};
+use gtk::{prelude::*, glib, gio, Application, SingleSelection, EventControllerKey, gdk, ListView};
 use crate::ui::LauncherUi;
 use crate::state::LauncherState;
 
