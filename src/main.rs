@@ -2,7 +2,6 @@ use nlauncher::launcher::Launcher;
 use nlauncher::styles::load_css;
 use gtk::{Application, prelude::*};
 use socket2::{Socket, Domain, Type};
-use std::net::Shutdown;
 
 const APP_ID: &str = "github.niahex.nwidgets.launcher";
 const LOCK_PATH: &str = "/tmp/nlauncher.sock";
