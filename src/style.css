@@ -1,0 +1,16 @@
+.launcher {
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: 10px;
+}
+
+.container {
+    padding: 10px;
+}
+
+.search-entry {
+    margin-bottom: 10px;
+}
+
+.icon {
+    margin-right: 10px;
+}

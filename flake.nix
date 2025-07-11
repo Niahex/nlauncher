@@ -1,5 +1,5 @@
 {
-  description = "nlauncher";
+  description = "nwidgets - A Ribir-based Wayland application";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -21,112 +21,110 @@
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = nixpkgs.legacyPackages.${system};
 
-      toolchain = with fenix.packages.${system};
-        combine [
-          stable.toolchain
-          targets.wasm32-unknown-unknown.stable.rust-std
-        ];
+      # Fenix est plus moderne et léger que rust-overlay
+      toolchain = fenix.packages.${system}.stable.toolchain;
 
       craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
+      src = craneLib.cleanCargoSource ./.;
 
-      src = craneLib.cleanCargoSource (craneLib.path ./.);
+      # Dépendances runtime
+      buildInputs = with pkgs; [
+        gtk4
+        gtk4-layer-shell
+        glib
+        pango
+        gdk-pixbuf
+        graphene
+        libadwaita
+        pkg-config
+        wayland
+        wayland-protocols
+        dbus
+        systemd
+        networkmanager
+        libnotify
+        nerd-fonts.ubuntu-mono
+        nerd-fonts.ubuntu-sans
+        nerd-fonts.ubuntu
+        openssl # Added for reqwest/openssl-sys compatibility
+      ];
 
+      # Dépendances build-time
       nativeBuildInputs = with pkgs; [
         pkg-config
-        cmake
+        makeWrapper
+        wrapGAppsHook4
+        # Ajout de clang et libclang pour bindgen
+        clang
+        llvmPackages.libclang
       ];
 
-      buildInputs = with pkgs; [
-        libxkbcommon
-        wayland
-        xorg.libX11
-        xorg.libXcursor
-        xorg.libXi
-        xorg.libXrandr
-        xorg.libXext
-        vulkan-loader
-        vulkan-validation-layers
-        libpulseaudio
-        openssl
-        freetype
-        libGL
-        libglvnd
-        protobuf
-        alsa-lib
-      ];
-
-      runtimeLibs = with pkgs; [
-        libxkbcommon
-        wayland
-        xorg.libX11
-        xorg.libXcursor
-        xorg.libXi
-        xorg.libXrandr
-        vulkan-loader
-      ];
-
+      # Variables d'environnement
       envVars = {
+        LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
         RUST_BACKTRACE = "full";
-        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath runtimeLibs;
-        XDG_RUNTIME_DIR = "/run/user/$(id -u)";
-        WAYLAND_DISPLAY = "wayland-1";
-        PROTOC = "${pkgs.protobuf}/bin/protoc";
       };
 
+      # Artefacts cargo partagés pour optimiser les rebuilds
       cargoArtifacts = craneLib.buildDepsOnly {
         inherit src buildInputs nativeBuildInputs;
         env = envVars;
-        doCheck = false;
       };
 
-      nlauncher = craneLib.buildPackage {
+      # Package principal
+      nwidgets = craneLib.buildPackage {
         inherit src cargoArtifacts buildInputs nativeBuildInputs;
         env = envVars;
-        pname = "nlauncher";
+        pname = "nwidgets";
         version = "0.1.0";
+        postInstall = ''
+          install -Dm644 data/github.niahex.nwidgets.gschema.xml $out/share/glib-2.0/schemas/github.niahex.nwidgets.gschema.xml
+        '';
       };
     in {
+      # Output moderne avec checks
       packages = {
-        default = nlauncher;
-        nlauncher = nlauncher;
+        default = nwidgets;
+        nwidgets = nwidgets;
       };
 
+      # Checks pour CI/CD
       checks = {
-        inherit nlauncher;
+        inherit nwidgets;
 
-        nlauncher-clippy = craneLib.cargoClippy {
+        # Vérifications supplémentaires
+        nwidgets-clippy = craneLib.cargoClippy {
           inherit src cargoArtifacts buildInputs nativeBuildInputs;
           env = envVars;
           cargoClippyExtraArgs = "--all-targets -- --deny warnings";
         };
 
-        nlauncher-fmt = craneLib.cargoFmt {
+        nwidgets-fmt = craneLib.cargoFmt {
           inherit src;
         };
       };
 
+      # Dev shell moderne
       devShells.default = pkgs.mkShell {
-        inputsFrom = [nlauncher];
+        inputsFrom = [nwidgets];
         nativeBuildInputs = with pkgs; [
-          (fenix.packages.${system}.combine [
-            fenix.packages.${system}.stable.toolchain
-            fenix.packages.${system}.rust-analyzer
-          ])
+          # Outils de développement modernes
+          fenix.packages.${system}.rust-analyzer
+          fenix.packages.${system}.stable.toolchain
+
+          # Outils additionnels
           cargo-watch
           cargo-edit
-          pkg-config
-          wayland-utils
-          wl-clipboard
+          bacon # cargo check continu
+          # gemini-cli
         ];
 
-        buildInputs = runtimeLibs;
+        env = envVars;
 
         shellHook = ''
-          export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath runtimeLibs}:$LD_LIBRARY_PATH
-          export XDG_RUNTIME_DIR=/run/user/$(id -u)
-          export WAYLAND_DISPLAY=wayland-1
-          echo "🦀 Rust $(rustc --version) - egui ready"
-          echo "🚀 Build with: nix build .#nlauncher"
+          echo "[🦀 Rust $(rustc --version)] - Ready !"
+          echo "Dépendances: ${pkgs.lib.concatStringsSep " " (map (p: p.name) nativeBuildInputs)}"
+          echo "Available commands: cargo watch, cargo edit, bacon"
         '';
       };
 
