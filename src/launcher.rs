@@ -18,7 +18,7 @@ impl Launcher {
         };
 
         ui.list_view.set_model(Some(&state.selection_model));
-        connect_events(&ui, &state);
+        connect_events(&ui, &state, app);
 
         Self {
             window: ui.window.clone(),

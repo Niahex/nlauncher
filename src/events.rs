@@ -1,8 +1,8 @@
-use gtk::{prelude::*, glib, gio, ApplicationWindow, SingleSelection, EventControllerKey, gdk, ListView};
+use gtk::{prelude::*, glib, gio, Application, ApplicationWindow, SingleSelection, EventControllerKey, gdk, ListView};
 use crate::ui::LauncherUi;
 use crate::state::LauncherState;
 
-pub fn connect_events(ui: &LauncherUi, state: &LauncherState) {
+pub fn connect_events(ui: &LauncherUi, state: &LauncherState, app: &Application) {
     let app_filter = state.app_filter.clone();
     let selection_model = state.selection_model.clone();
     ui.search_entry.connect_changed(move |_| {
@@ -22,23 +22,21 @@ pub fn connect_events(ui: &LauncherUi, state: &LauncherState) {
     });
 
     let key_controller = EventControllerKey::new();
-    let window = ui.window.clone();
-    let search_entry = ui.search_entry.clone();
-    let selection_model = state.selection_model.clone();
-    let list_view = ui.list_view.clone();
+    let app_clone = app.clone();
+    let list_view_clone = ui.list_view.clone();
+    let selection_model_clone = state.selection_model.clone();
     key_controller.connect_key_pressed(move |_, keyval, _, _| {
             match keyval {
                 gdk::Key::Escape => {
-                    search_entry.set_text("");
-                    window.set_visible(false);
+                    app_clone.quit();
                     glib::Propagation::Stop
                 },
                 gdk::Key::Down => {
-                    navigate_list(&selection_model, &list_view, 1);
+                    navigate_list(&selection_model_clone, &list_view_clone, 1);
                     glib::Propagation::Stop
                 },
                 gdk::Key::Up => {
-                    navigate_list(&selection_model, &list_view, -1);
+                    navigate_list(&selection_model_clone, &list_view_clone, -1);
                     glib::Propagation::Stop
                 },
                 _ => glib::Propagation::Proceed,
