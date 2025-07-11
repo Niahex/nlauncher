@@ -11,16 +11,12 @@ pub struct Launcher {
 
 impl Launcher {
     pub fn new(app: &Application) -> Self {
-        // 1. Construire l'UI sans dépendances
         let ui = build_ui(app);
-
-        // 2. Créer l'état en utilisant les composants de l'UI
         let state = {
             let search_entry = ui.search_entry.clone();
             LauncherState::new(move || search_entry.text().to_string())
         };
 
-        // 3. Connecter l'UI et l'état
         ui.list_view.set_model(Some(&state.selection_model));
         connect_events(&ui, &state);
 
@@ -31,9 +27,7 @@ impl Launcher {
         }
     }
 
-    pub fn init(&self) {
-        // L'initialisation est déjà faite dans `new`
-    }
+    pub fn init(&self) {}
 
     pub fn show(&self) {
         self.window.present();
