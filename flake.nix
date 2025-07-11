@@ -33,7 +33,7 @@
 
       nativeBuildInputs = with pkgs; [
         pkg-config
-        dart-sass
+        cmake
       ];
 
       buildInputs = with pkgs; [
@@ -51,6 +51,8 @@
         freetype
         libGL
         libglvnd
+        protobuf
+        alsa-lib
       ];
 
       runtimeLibs = with pkgs; [
@@ -68,6 +70,7 @@
         LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath runtimeLibs;
         XDG_RUNTIME_DIR = "/run/user/$(id -u)";
         WAYLAND_DISPLAY = "wayland-1";
+        PROTOC = "${pkgs.protobuf}/bin/protoc";
       };
 
       cargoArtifacts = craneLib.buildDepsOnly {
@@ -122,7 +125,7 @@
           export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath runtimeLibs}:$LD_LIBRARY_PATH
           export XDG_RUNTIME_DIR=/run/user/$(id -u)
           export WAYLAND_DISPLAY=wayland-1
-          echo "🦀 Rust $(rustc --version) - GPUI ready"
+          echo "🦀 Rust $(rustc --version) - egui ready"
           echo "🚀 Build with: nix build .#nlauncher"
         '';
       };

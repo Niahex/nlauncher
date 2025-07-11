@@ -6,13 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-gpui = { git = "https://github.com/zed-industries/zed" }
+iced = { version = "0.13.1", features = ["tokio", "wgpu"] }
 tokio = { version = "1.44.1", features = ["full"] }
-chrono = { version = "0.4.40" }
-socket2 = "0.6.0"
-zbus = "5.7.1"
-anyhow = "1.0.95"
-tracing-subscriber = "0.3.19"
+freedesktop-desktop-entry = "0.5.1"
+xdg = "2.5.2"
 
 [profile.release]
 codegen-units = 1
