@@ -36,6 +36,8 @@ pub fn build_ui(app: &Application) -> LauncherUi {
         .can_focus(true)
         .build();
 
+    search_entry.set_icon_from_icon_name(gtk::EntryIconPosition::Primary, Some("system-search-symbolic"));
+
     let factory = SignalListItemFactory::new();
     factory.connect_setup(move |_factory, item| {
         let item = item.downcast_ref::<gtk::ListItem>().unwrap();

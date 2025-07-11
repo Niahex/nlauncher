@@ -1,4 +1,5 @@
 pub mod applications;
+pub mod cache;
 pub mod events;
 pub mod launcher;
 pub mod state;

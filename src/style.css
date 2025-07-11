@@ -9,6 +9,7 @@
 
 .search-entry {
     margin-bottom: 10px;
+    padding: 0 5px; /* Ajoute un espacement horizontal */
 }
 
 .icon {
