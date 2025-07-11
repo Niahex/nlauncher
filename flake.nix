@@ -58,7 +58,15 @@
         pname = "nlauncher";
         version = "0.1.0";
         postInstall = ''
-          install -Dm644 data/github.niahex.nlauncher.gschema.xml $out/share/glib-2.0/schemas/github.niahex.nlauncher.gschema.xml
+          install -d $out/share/glib-2.0/schemas
+          cat > $out/share/glib-2.0/schemas/github.niahex.nlauncher.gschema.xml << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <schemalist>
+            <schema id="github.niahex.nlauncher" path="/github/niahex/nlauncher/">
+              <!-- Aucune clé de schéma pour le moment -->
+            </schema>
+          </schemalist>
+          EOF
         '';
       };
     in {
