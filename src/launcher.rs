@@ -18,7 +18,7 @@ impl Launcher {
         };
 
         ui.list_view.set_model(Some(&state.selection_model));
-        // connect_events(&ui, &state, app);
+        connect_events(&ui, &state, app);
 
         Self {
             window: ui.window.clone(),
@@ -31,7 +31,7 @@ impl Launcher {
 
     pub fn show(&self) {
         self.window.present();
-        // self.ui.search_entry.grab_focus();
+        self.ui.search_entry.grab_focus();
 
         if self.state.selection_model.n_items() > 0 {
             self.state.selection_model.set_selected(0);
