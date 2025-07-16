@@ -5,11 +5,6 @@ const CSS: &str = r#"
     all: unset;
 }
 
-// .launcher {
-//     margin 20px;
-//     border-radius: 10px;
-// }
-
 .container {
     padding: 10px;
     margin 20px;
@@ -20,13 +15,34 @@ const CSS: &str = r#"
 }
 
 .search-entry {
-    margin-bottom: 10px;
-    padding: 0 5px;
+    -gtk-icon-size: 20px;
+    background-color: #3b4252;
+    border-radius: 5px;
+    padding: 5px;
+    margin-top: 10px;
 }
 
-.icon {
-    margin-right: 10px;
+.search-entry text {
+    padding-left: 5px;
 }
+
+.view {
+    -gtk-icon-size: 25px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.view row {
+    margin-top: 5px;
+    margin-bottom: 5px;
+    padding: 5px;
+}
+
+.view row:selected {
+    background-color: #8fbcbb;
+    border-radius: 5px;
+}
+
 "#;
 
 pub fn load_css() {
