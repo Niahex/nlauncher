@@ -1,5 +1,6 @@
 use gtk::{Application, ApplicationWindow, Box, Orientation, Entry, ListView, ScrolledWindow, SignalListItemFactory, Label, prelude::*, gio};
 use gtk4_layer_shell::{Layer, Edge, KeyboardMode, LayerShell};
+use std::env;
 
 pub struct LauncherUi {
     pub window: ApplicationWindow,
@@ -17,7 +18,12 @@ pub fn build_ui(app: &Application) -> LauncherUi {
 
     window.init_layer_shell();
     window.set_layer(Layer::Overlay);
-    window.set_keyboard_mode(KeyboardMode::Exclusive);
+    
+    // Ne pas définir le mode clavier exclusif si GTK_DEBUG=interactive
+    if env::var("GTK_DEBUG").unwrap_or_default() != "interactive" {
+        window.set_keyboard_mode(KeyboardMode::Exclusive);
+    }
+
     window.set_size_request(500, 300);
     window.set_anchor(Edge::Top, false);
     window.set_anchor(Edge::Bottom, false);

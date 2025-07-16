@@ -2,6 +2,7 @@ use gtk::{prelude::*, Application, ApplicationWindow};
 use crate::state::LauncherState;
 use crate::ui::{LauncherUi, build_ui};
 use crate::events::connect_events;
+use std::env;
 
 pub struct Launcher {
     pub window: ApplicationWindow,
@@ -31,7 +32,11 @@ impl Launcher {
 
     pub fn show(&self) {
         self.window.present();
-        self.ui.search_entry.grab_focus();
+        
+        // Ne pas grab_focus si GTK_DEBUG=interactive
+        if env::var("GTK_DEBUG").unwrap_or_default() != "interactive" {
+            self.ui.search_entry.grab_focus();
+        }
 
         if self.state.selection_model.n_items() > 0 {
             self.state.selection_model.set_selected(0);
