@@ -1,13 +1,22 @@
 use gtk::gdk;
 
 const CSS: &str = r#"
-.launcher {
-    background-color: rgba(0, 0, 0, 0.8);
-    border-radius: 10px;
+* {
+    all: unset;
 }
+
+// .launcher {
+//     margin 20px;
+//     border-radius: 10px;
+// }
 
 .container {
     padding: 10px;
+    margin 20px;
+    border: 1px solid;
+    border-radius: 10px;
+    border-color: #8fbcbb;
+    background-color: #2e3440;
 }
 
 .search-entry {
@@ -27,6 +36,6 @@ pub fn load_css() {
     gtk::style_context_add_provider_for_display(
         &gdk::Display::default().expect("Could not connect to a display."),
         &provider,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        gtk::STYLE_PROVIDER_PRIORITY_USER,
     );
 }
