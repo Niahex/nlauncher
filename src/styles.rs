@@ -40,6 +40,7 @@ const CSS: &str = r#"
 
 .view row:selected {
     background-color: #8fbcbb;
+    color: #2e3440;
     border-radius: 5px;
 }
 
