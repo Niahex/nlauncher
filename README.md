@@ -4,12 +4,14 @@ My personal launcher.
 
 ## Todo's
 - [] flake refactor like nosd
-- [] Capslock
-- [] Source
-- [] Keep event with bind ? MB directly define in flake.
+- [] shell cmd
+- [] converter (money, time)
+- [] calc
+- [] search file
 
-## Futur
-- [] Config like hyprland
+## Possibilities
+- [] MB Hyprland Config, install script
+- [] HM config
 
 ## Rust Gui Lib
 - [x] gtk4rs : Quite mature, wayland ok, layershell.
