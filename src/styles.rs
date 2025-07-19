@@ -9,8 +9,8 @@ const CSS: &str = r#"
     padding: 10px;
     margin 20px;
     border: 1px solid;
+    border-color: rgba(136, 192, 208, 0.25);
     border-radius: 10px;
-    border-color: #8fbcbb;
     background-color: #2e3440;
 }
 
