@@ -3,27 +3,32 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    fenix = {
-      url = "github:nix-community/fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     flake-utils.url = "github:numtide/flake-utils";
     crane.url = "github:ipetkov/crane";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
 
   outputs = {
+    self,
     nixpkgs,
     flake-utils,
     crane,
-    fenix,
+    rust-overlay,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
-      pkgs = nixpkgs.legacyPackages.${system};
+      overlays = [ (import rust-overlay) ];
+      pkgs = import nixpkgs { inherit system overlays; };
 
-      toolchain = fenix.packages.${system}.stable.toolchain;
+      rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+        extensions = [ "rust-src" ];
+      };
 
-      craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
+      craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
       src = craneLib.cleanCargoSource ./.;
 
       buildInputs = with pkgs; [
@@ -92,14 +97,11 @@
       devShells.default = pkgs.mkShell {
         inputsFrom = [nlauncher];
         nativeBuildInputs = with pkgs; [
-          fenix.packages.${system}.rust-analyzer
-          fenix.packages.${system}.stable.toolchain
+          rust-analyzer
+          rustToolchain
           cargo-watch
           cargo-edit
           bacon
-          nerd-fonts.ubuntu-mono
-          nerd-fonts.ubuntu-sans
-          nerd-fonts.ubuntu
         ];
 
         env = envVars;
