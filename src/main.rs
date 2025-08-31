@@ -9,6 +9,7 @@ const APP_ID: &str = "github.niahex.nlauncher";
 const LOCK_PATH: &str = "/tmp/nlauncher.sock";
 
 fn main() {
+    env_logger::init();
     // Essayer de se connecter à une instance existante.
     let client_socket = Socket::new(Domain::UNIX, Type::STREAM, None).unwrap();
     let addr = socket2::SockAddr::unix(LOCK_PATH).unwrap();
