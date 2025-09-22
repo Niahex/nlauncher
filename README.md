@@ -3,11 +3,6 @@
 My personal launcher.
 
 ## Todo's
-- [] flake refactor like nosd
-- [] shell cmd
-- [] converter (money, time)
-- [] calc
-- [] search file
 
 ## Possibilities
 - [] MB Hyprland Config, install script
