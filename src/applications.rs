@@ -25,6 +25,7 @@ impl Applications {
             }
             data_dirs.push("/usr/share".to_string());
             data_dirs.push("/usr/local/share".to_string());
+            data_dirs.push("/run/current-system/sw/share/applications".to_string());
         }
 
         for data_dir in data_dirs {
