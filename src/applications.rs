@@ -53,9 +53,8 @@ impl Applications {
         sorted_files
     }
 
-    pub fn get_all_applications() -> gio::ListStore {
+    pub fn get_cached_applications() -> gio::ListStore {
         let app_list_store = gio::ListStore::new::<gio::AppInfo>();
-
         if let Some(app_ids) = cache::load_from_cache::<Vec<String>>() {
             info!("Loading applications from cache.");
             for id in app_ids {
@@ -64,49 +63,43 @@ impl Applications {
                     app_list_store.append(&app_info);
                 }
             }
-        } else {
-            info!("Cache empty or invalid, scanning system for applications.");
-            let mut app_ids = HashSet::new();
+        }
+        app_list_store
+    }
 
-            // Method 1: Standard GIO scan
-            info!("Scanning with gio::AppInfo::all()");
-            let all_apps = gio::AppInfo::all();
-            for app_info in all_apps {
-                if app_info.should_show() {
-                    if let Some(id) = app_info.id() {
-                        app_ids.insert(id.to_string());
-                        app_list_store.append(&app_info);
-                    }
+    pub fn scan_for_applications() -> Vec<String> {
+        info!("Scanning system for applications.");
+        let mut app_ids = HashSet::new();
+
+        // Method 1: Standard GIO scan
+        info!("Scanning with gio::AppInfo::all()");
+        let all_apps = gio::AppInfo::all();
+        for app_info in all_apps {
+            if app_info.should_show() {
+                if let Some(id) = app_info.id() {
+                    app_ids.insert(id.to_string());
                 }
-            }
-
-            // Method 2: Manual scan of XDG_DATA_DIRS
-            info!("Performing manual scan of XDG_DATA_DIRS.");
-            let desktop_files = Self::find_desktop_files();
-            for file_path in desktop_files {
-                if let Some(app_info) = gio::DesktopAppInfo::from_filename(&file_path) {
-                    let app = app_info.upcast::<gio::AppInfo>();
-                    if app.should_show() {
-                        if let Some(id) = app.id() {
-                            // Add only if it's not a duplicate
-                            if app_ids.insert(id.to_string()) {
-                                app_list_store.append(&app);
-                            }
-                        }
-                    }
-                } else {
-                    warn!("Could not create AppInfo from file: {:?}", file_path);
-                }
-            }
-            
-            let mut sorted_app_ids: Vec<_> = app_ids.into_iter().collect();
-            sorted_app_ids.sort();
-
-            if let Err(e) = cache::save_to_cache(&sorted_app_ids) {
-                eprintln!("Failed to save app cache: {}", e);
             }
         }
 
-        app_list_store
+        // Method 2: Manual scan of XDG_DATA_DIRS
+        info!("Performing manual scan of XDG_DATA_DIRS.");
+        let desktop_files = Self::find_desktop_files();
+        for file_path in desktop_files {
+            if let Some(app_info) = gio::DesktopAppInfo::from_filename(&file_path) {
+                let app = app_info.upcast::<gio::AppInfo>();
+                if app.should_show() {
+                    if let Some(id) = app.id() {
+                        app_ids.insert(id.to_string());
+                    }
+                }
+            } else {
+                warn!("Could not create AppInfo from file: {:?}", file_path);
+            }
+        }
+        
+        let mut sorted_app_ids: Vec<_> = app_ids.into_iter().collect();
+        sorted_app_ids.sort();
+        sorted_app_ids
     }
 }

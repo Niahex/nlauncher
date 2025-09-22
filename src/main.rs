@@ -1,11 +1,14 @@
 use nlauncher::launcher::Launcher;
 use nlauncher::styles::load_css;
-use gtk::{Application, prelude::*, glib};
+use gtk::{Application, prelude::*, glib, gio};
 use socket2::{Socket, Domain, Type};
 use std::io::Read;
 use std::sync::mpsc;
 use std::env;
 use nlauncher::cache;
+use nlauncher::applications::Applications;
+use std::thread;
+use std::collections::HashSet;
 
 const APP_ID: &str = "github.niahex.nlauncher";
 const LOCK_PATH: &str = "/tmp/nlauncher.sock";
@@ -65,9 +68,62 @@ fn main() {
     });
 
     app.connect_activate(|app| {
-        let launcher = Launcher::new(app);
+        let app_list_store = Applications::get_cached_applications();
+        let launcher = Launcher::new(app, app_list_store.clone());
         launcher.init();
         launcher.show();
+
+        let (tx, rx) = mpsc::channel();
+
+        thread::spawn(move || {
+            let app_ids = Applications::scan_for_applications();
+            tx.send(app_ids).unwrap();
+        });
+
+        glib::idle_add_local(move || {
+            if let Ok(app_ids) = rx.try_recv() {
+                let cached_app_ids: HashSet<String> = app_list_store
+                    .iter::<gio::AppInfo>()
+                    .filter_map(|app_info| app_info.ok())
+                    .filter_map(|app_info| app_info.id().map(|s| s.to_string()))
+                    .collect();
+
+                let new_app_ids: HashSet<String> = app_ids.iter().cloned().collect();
+
+                // Add new apps
+                for id in new_app_ids.difference(&cached_app_ids) {
+                    if let Some(desktop_app_info) = gio::DesktopAppInfo::new(id) {
+                        let app_info = desktop_app_info.upcast::<gio::AppInfo>();
+                        app_list_store.append(&app_info);
+                    }
+                }
+
+                // Remove old apps
+                let mut to_remove = Vec::new();
+                for (i, app_info) in app_list_store.iter::<gio::AppInfo>().enumerate() {
+                    if let Ok(app_info) = app_info {
+                        if let Some(id) = app_info.id() {
+                            if !new_app_ids.contains(id.as_str()) {
+                                to_remove.push(i as u32);
+                            }
+                        }
+                    }
+                }
+                to_remove.reverse(); // Remove from the end to avoid index shifting
+                for i in to_remove {
+                    app_list_store.remove(i);
+                }
+                
+                // Save to cache
+                if let Err(e) = cache::save_to_cache(&app_ids) {
+                    eprintln!("Failed to save app cache: {}", e);
+                }
+
+                return glib::ControlFlow::Break;
+            }
+            
+            glib::ControlFlow::Continue
+        });
     });
 
     app.run();

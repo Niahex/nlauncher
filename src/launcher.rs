@@ -1,4 +1,4 @@
-use gtk::{prelude::*, Application, ApplicationWindow};
+use gtk::{prelude::*, Application, ApplicationWindow, gio};
 use crate::state::LauncherState;
 use crate::ui::{LauncherUi, build_ui};
 use crate::events::connect_events;
@@ -11,11 +11,11 @@ pub struct Launcher {
 }
 
 impl Launcher {
-    pub fn new(app: &Application) -> Self {
+    pub fn new(app: &Application, app_list_store: gio::ListStore) -> Self {
         let ui = build_ui(app);
         let state = {
             let search_entry = ui.search_entry.clone();
-            LauncherState::new(move || search_entry.text().to_string())
+            LauncherState::new(app_list_store, move || search_entry.text().to_string())
         };
 
         ui.list_view.set_model(Some(&state.selection_model));

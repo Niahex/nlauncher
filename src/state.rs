@@ -1,5 +1,4 @@
 use gtk::{gio, CustomFilter, FilterListModel, SingleSelection, prelude::*};
-use crate::applications::Applications;
 
 pub struct LauncherState {
     pub app_list_store: gio::ListStore,
@@ -9,9 +8,7 @@ pub struct LauncherState {
 }
 
 impl LauncherState {
-    pub fn new(search_text_provider: impl Fn() -> String + 'static) -> Self {
-        let app_list_store = Applications::get_all_applications();
-
+    pub fn new(app_list_store: gio::ListStore, search_text_provider: impl Fn() -> String + 'static) -> Self {
         let app_filter = CustomFilter::new(move |obj| {
             let app_info = obj.downcast_ref::<gio::AppInfo>().unwrap();
             let search_text = search_text_provider().to_lowercase();
