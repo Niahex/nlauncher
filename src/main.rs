@@ -4,12 +4,22 @@ use gtk::{Application, prelude::*, glib};
 use socket2::{Socket, Domain, Type};
 use std::io::Read;
 use std::sync::mpsc;
+use std::env;
+use nlauncher::cache;
 
 const APP_ID: &str = "github.niahex.nlauncher";
 const LOCK_PATH: &str = "/tmp/nlauncher.sock";
 
 fn main() {
     env_logger::init();
+
+    let args: Vec<String> = env::args().collect();
+    if args.contains(&"--refresh".to_string()) {
+        if let Err(e) = cache::clear_cache() {
+            eprintln!("Failed to clear cache: {}", e);
+        }
+    }
+
     // Essayer de se connecter à une instance existante.
     let client_socket = Socket::new(Domain::UNIX, Type::STREAM, None).unwrap();
     let addr = socket2::SockAddr::unix(LOCK_PATH).unwrap();
@@ -65,4 +75,3 @@ fn main() {
     // Nettoyer le fichier de socket en quittant.
     let _ = std::fs::remove_file(LOCK_PATH);
 }
-

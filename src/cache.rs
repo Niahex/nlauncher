@@ -2,6 +2,7 @@ use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use serde::{de::DeserializeOwned, Serialize};
+use log::info;
 
 // Retourne le chemin du répertoire du cache, le crée s'il n'existe pas.
 fn get_cache_dir() -> Result<PathBuf, std::io::Error> {
@@ -33,4 +34,14 @@ pub fn save_to_cache<T: Serialize>(data: &T) -> Result<(), std::io::Error> {
     let json_data = serde_json::to_string_pretty(data)?;
     let mut file = File::create(path)?;
     file.write_all(json_data.as_bytes())
+}
+
+pub fn clear_cache() -> Result<(), std::io::Error> {
+    if let Ok(path) = get_cache_file_path() {
+        if path.exists() {
+            info!("Clearing cache file at: {:?}", path);
+            fs::remove_file(path)?;
+        }
+    }
+    Ok(())
 }
