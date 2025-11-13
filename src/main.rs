@@ -1,9 +1,48 @@
 use gpui::{
     actions, App, Application, Bounds, Context, FocusHandle, KeyBinding, KeyDownEvent, Render,
     SharedString, Size, Window, WindowBackgroundAppearance, WindowBounds, WindowKind,
-    WindowOptions, div, layer_shell::*, point, prelude::*, px, rgb,
+    WindowOptions, div, img, layer_shell::*, point, prelude::*, px, rgb,
 };
 use std::process::Command;
+use std::path::Path;
+
+fn resolve_icon_path(icon_name: &str) -> Option<String> {
+    let icon_dirs = [
+        "/run/current-system/sw/share/icons/Nordzy/apps/scalable",
+        "/run/current-system/sw/share/icons/hicolor",
+        "/run/current-system/sw/share/icons/Nordic-bluish/apps/scalable",
+        "/home/nia/.local/share/icons", 
+        "/usr/share/icons",
+        "/usr/share/pixmaps",
+    ];
+    
+    // Essayer d'abord les SVG scalables
+    for dir in &icon_dirs[..3] {
+        let path = format!("{}/{}.svg", dir, icon_name);
+        if Path::new(&path).exists() {
+            return Some(path);
+        }
+    }
+    
+    // Puis les PNG dans hicolor
+    let sizes = ["48", "32", "24", "16"];
+    for size in &sizes {
+        let path = format!("/run/current-system/sw/share/icons/hicolor/{}x{}/apps/{}.png", size, size, icon_name);
+        if Path::new(&path).exists() {
+            return Some(path);
+        }
+    }
+    
+    // Fallback pixmaps
+    for ext in &["png", "svg", "xpm"] {
+        let path = format!("/usr/share/pixmaps/{}.{}", icon_name, ext);
+        if Path::new(&path).exists() {
+            return Some(path);
+        }
+    }
+    
+    None
+}
 
 mod applications;
 mod state;
@@ -30,25 +69,29 @@ impl Launcher {
         }
     }
 
-    fn backspace(&mut self, _: &Backspace, _: &mut Window, _: &mut Context<Self>) {
+    fn backspace(&mut self, _: &Backspace, _: &mut Window, cx: &mut Context<Self>) {
         let mut query = self.query.to_string();
         if !query.is_empty() {
             query.pop();
             self.query = query.into();
             self.selected_index = 0;
+            cx.notify();
         }
     }
 
-    fn up(&mut self, _: &Up, _: &mut Window, _: &mut Context<Self>) {
-        if self.selected_index > 0 {
-            self.selected_index -= 1;
-        }
-    }
-
-    fn down(&mut self, _: &Down, _: &mut Window, _: &mut Context<Self>) {
+    fn up(&mut self, _: &Up, _: &mut Window, cx: &mut Context<Self>) {
         let filtered_count = self.filtered_apps().len();
-        if self.selected_index + 1 < filtered_count {
+        if filtered_count > 0 && self.selected_index > 0 {
+            self.selected_index -= 1;
+            cx.notify();
+        }
+    }
+
+    fn down(&mut self, _: &Down, _: &mut Window, cx: &mut Context<Self>) {
+        let filtered_count = self.filtered_apps().len();
+        if filtered_count > 0 && self.selected_index + 1 < filtered_count {
             self.selected_index += 1;
+            cx.notify();
         }
     }
 
@@ -127,18 +170,45 @@ impl Render for Launcher {
                                 filtered_apps
                                     .into_iter()
                                     .enumerate()
+                                    .skip(if self.selected_index >= 10 { self.selected_index - 9 } else { 0 })
                                     .take(10)
                                     .map(|(i, app)| {
                                         let mut item = div()
+                                            .flex()
+                                            .items_center()
                                             .p_2()
-                                            .text_color(rgb(0xeceff4))
-                                            .child(app.name.clone());
+                                            .text_color(rgb(0xeceff4));
                                         
                                         if i == self.selected_index {
                                             item = item.bg(rgb(0x88c0d0));
                                         }
                                         
-                                        item
+                                        item.child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .gap_2()
+                                                .child(
+                                                    if let Some(icon_name) = &app.icon {
+                                                        if let Some(icon_path) = resolve_icon_path(icon_name) {
+                                                            div()
+                                                                .size_6()
+                                                                .child(img(icon_path).size_6())
+                                                        } else {
+                                                            div()
+                                                                .size_6()
+                                                                .bg(rgb(0x5e81ac))
+                                                                .rounded_sm()
+                                                        }
+                                                    } else {
+                                                        div()
+                                                            .size_6()
+                                                            .bg(rgb(0x5e81ac))
+                                                            .rounded_sm()
+                                                    }
+                                                )
+                                                .child(app.name.clone())
+                                        )
                                     })
                             )
                     )
