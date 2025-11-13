@@ -1,5 +1,5 @@
 {
-  description = "nlauncher - A GTK-based application launcher for Wayland";
+  description = "nlauncher - A GPUI-based application launcher";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -30,24 +30,34 @@
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
         src = craneLib.cleanCargoSource ./.;
 
-        # Common dependencies
+        # Dependencies for building the application
         buildInputs = with pkgs; [
-          gtk4
-          gtk4-layer-shell
-          glib
-          pango
-          gdk-pixbuf
-          wayland
-          wayland-protocols
+          xorg.libxcb
+          xorg.libX11
+          libxkbcommon
+          fontconfig
           dbus
+          openssl
+          freetype
+          expat
+          nerd-fonts.ubuntu-mono
+          nerd-fonts.ubuntu-sans
+          nerd-fonts.ubuntu
+          noto-fonts-emoji
+        ];
+
+        # Dependencies needed only at runtime
+        runtimeDependencies = with pkgs; [
+          wayland
+          vulkan-loader
         ];
 
         nativeBuildInputs = with pkgs; [
           pkg-config
           makeWrapper
-          wrapGAppsHook4
+          autoPatchelfHook
         ];
-
+        
         envVars = {
           RUST_BACKTRACE = "full";
         };
@@ -60,7 +70,7 @@
 
         # Application package definition
         nlauncher = craneLib.buildPackage {
-          inherit src cargoArtifacts buildInputs nativeBuildInputs;
+          inherit src cargoArtifacts buildInputs nativeBuildInputs runtimeDependencies;
           env = envVars;
           pname = "nlauncher";
           version = "0.1.0";
@@ -96,6 +106,9 @@
           inputsFrom = [nlauncher];
           nativeBuildInputs = devTools;
           env = envVars;
+          
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (buildInputs ++ runtimeDependencies);
+          FONTCONFIG_FILE = pkgs.makeFontsConf { fontDirectories = buildInputs; };
 
           shellHook = ''
             echo "[🦀 Rust $(rustc --version)] - Ready to develop nlauncher!"
