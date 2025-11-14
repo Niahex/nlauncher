@@ -95,28 +95,36 @@ impl Launcher {
     }
 
     fn filtered_apps(&mut self) -> Vec<&ApplicationInfo> {
+        // Early return pour query vide
+        if self.query.is_empty() {
+            self.filtered_cache = None;
+            self.last_query.clear();
+            return self.applications.iter().collect();
+        }
+        
         // Vérifier si on doit recalculer le cache
         if self.last_query != self.query_lower {
             self.last_query = self.query_lower.clone();
             
-            if self.query.is_empty() {
-                self.filtered_cache = None;
-            } else {
-                let indices: Vec<usize> = self.applications
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, app)| app.name_lower.contains(&self.query_lower))
-                    .map(|(i, _)| i)
-                    .collect();
-                self.filtered_cache = Some(indices);
-            }
+            let indices: Vec<usize> = self.applications
+                .iter()
+                .enumerate()
+                .filter_map(|(i, app)| {
+                    if app.name_lower.contains(&self.query_lower) {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            self.filtered_cache = Some(indices);
         }
         
         // Retourner les résultats depuis le cache
         if let Some(ref indices) = self.filtered_cache {
             indices.iter().map(|&i| &self.applications[i]).collect()
         } else {
-            self.applications.iter().collect()
+            Vec::new()
         }
     }
 }
