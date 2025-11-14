@@ -67,13 +67,30 @@ impl Launcher {
         let selected_index = self.selected_index;
         let filtered_apps = self.filtered_apps();
         if let Some(app) = filtered_apps.get(selected_index) {
-            let mut cmd = Command::new("sh");
-            cmd.arg("-c").arg(&app.exec);
-            if let Err(err) = cmd.spawn() {
-                log::error!("Failed to launch application: {}", err);
-            } else {
-                cx.quit();
-            }
+            let exec = app.exec.clone();
+            
+            // Lancer en arrière-plan avec environnement propre
+            std::thread::spawn(move || {
+                let mut cmd = Command::new("sh");
+                cmd.arg("-c")
+                   .arg(&exec)
+                   .env_clear()  // Nettoyer l'environnement
+                   .env("PATH", std::env::var("PATH").unwrap_or_default())
+                   .env("HOME", std::env::var("HOME").unwrap_or_default())
+                   .env("USER", std::env::var("USER").unwrap_or_default())
+                   .env("XDG_RUNTIME_DIR", std::env::var("XDG_RUNTIME_DIR").unwrap_or_default())
+                   .env("WAYLAND_DISPLAY", std::env::var("WAYLAND_DISPLAY").unwrap_or_default())
+                   .env("DISPLAY", std::env::var("DISPLAY").unwrap_or_default())
+                   .stdin(std::process::Stdio::null())
+                   .stdout(std::process::Stdio::null())
+                   .stderr(std::process::Stdio::null());
+                
+                if let Err(err) = cmd.spawn() {
+                    eprintln!("Failed to launch {}: {}", exec, err);
+                }
+            });
+            
+            cx.quit();
         }
     }
 
