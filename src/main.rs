@@ -69,9 +69,9 @@ impl Launcher {
         }
     }
 
-    fn filtered_apps(&self) -> Vec<ApplicationInfo> {
+    fn filtered_apps(&self) -> Vec<&ApplicationInfo> {
         if self.query.is_empty() {
-            self.applications.clone()
+            self.applications.iter().collect()
         } else {
             self.applications
                 .iter()
@@ -80,7 +80,6 @@ impl Launcher {
                         .to_lowercase()
                         .contains(&self.query.to_lowercase())
                 })
-                .cloned()
                 .collect()
         }
     }
@@ -88,8 +87,6 @@ impl Launcher {
 
 impl Render for Launcher {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let filtered_apps = self.filtered_apps();
-
         div()
             .track_focus(&self.focus_handle)
             .size_full()
@@ -128,7 +125,7 @@ impl Render for Launcher {
                             .flex_col()
                             .mt_2()
                             .children({
-                                let filtered_apps = filtered_apps.clone();
+                                let filtered_apps = self.filtered_apps();
                                 let start_index = if self.selected_index >= 10 { self.selected_index - 9 } else { 0 };
                                 
                                 filtered_apps

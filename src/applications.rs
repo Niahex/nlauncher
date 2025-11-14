@@ -3,8 +3,49 @@ use freedesktop_desktop_entry::{DesktopEntry, Iter};
 use freedesktop_icons::lookup;
 use std::fs;
 use std::collections::HashSet;
+use std::path::Path;
+use std::time::SystemTime;
+
+const CACHE_FILE: &str = "/tmp/nlauncher_cache.json";
 
 pub fn load_applications() -> Vec<ApplicationInfo> {
+    // Try to load from cache first
+    if let Ok(cached) = load_from_cache() {
+        return cached;
+    }
+    
+    // Cache miss or invalid, scan applications
+    let applications = scan_applications();
+    
+    // Save to cache
+    let _ = save_to_cache(&applications);
+    
+    applications
+}
+
+fn load_from_cache() -> Result<Vec<ApplicationInfo>, Box<dyn std::error::Error>> {
+    let cache_path = Path::new(CACHE_FILE);
+    
+    // Check if cache exists and is recent (less than 1 hour old)
+    let metadata = fs::metadata(cache_path)?;
+    let cache_age = SystemTime::now().duration_since(metadata.modified()?)?;
+    if cache_age.as_secs() > 3600 {
+        return Err("Cache too old".into());
+    }
+    
+    let content = fs::read_to_string(cache_path)?;
+    let applications: Vec<ApplicationInfo> = serde_json::from_str(&content)?;
+    
+    Ok(applications)
+}
+
+fn save_to_cache(applications: &[ApplicationInfo]) -> Result<(), Box<dyn std::error::Error>> {
+    let content = serde_json::to_string(applications)?;
+    fs::write(CACHE_FILE, content)?;
+    Ok(())
+}
+
+fn scan_applications() -> Vec<ApplicationInfo> {
     let mut applications = Vec::new();
     let mut seen_names = HashSet::new();
     
