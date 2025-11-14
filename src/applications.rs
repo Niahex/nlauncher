@@ -66,6 +66,7 @@ fn scan_applications() -> Vec<ApplicationInfo> {
                         
                         applications.push(ApplicationInfo {
                             name: name.to_string(),
+                            name_lower: name.to_lowercase(),
                             exec: exec.to_string(),
                             icon: desktop_entry.icon().map(|s| s.to_string()),
                             icon_path,

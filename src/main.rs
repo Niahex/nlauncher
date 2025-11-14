@@ -16,7 +16,10 @@ struct Launcher {
     focus_handle: FocusHandle,
     applications: Vec<ApplicationInfo>,
     query: SharedString,
+    query_lower: String,
     selected_index: usize,
+    filtered_cache: Option<Vec<usize>>,
+    last_query: String,
 }
 
 impl Launcher {
@@ -26,7 +29,10 @@ impl Launcher {
             focus_handle: cx.focus_handle(),
             applications,
             query: "".into(),
+            query_lower: String::new(),
             selected_index: 0,
+            filtered_cache: None,
+            last_query: String::new(),
         }
     }
 
@@ -34,7 +40,8 @@ impl Launcher {
         let mut query = self.query.to_string();
         if !query.is_empty() {
             query.pop();
-            self.query = query.into();
+            self.query = query.clone().into();
+            self.query_lower = query.to_lowercase();
             self.selected_index = 0;
             cx.notify();
         }
@@ -57,8 +64,9 @@ impl Launcher {
     }
 
     fn launch(&mut self, _: &Launch, _: &mut Window, cx: &mut Context<Self>) {
+        let selected_index = self.selected_index;
         let filtered_apps = self.filtered_apps();
-        if let Some(app) = filtered_apps.get(self.selected_index) {
+        if let Some(app) = filtered_apps.get(selected_index) {
             let mut cmd = Command::new("sh");
             cmd.arg("-c").arg(&app.exec);
             if let Err(err) = cmd.spawn() {
@@ -69,26 +77,46 @@ impl Launcher {
         }
     }
 
-    fn filtered_apps(&self) -> Vec<&ApplicationInfo> {
-        if self.query.is_empty() {
-            self.applications.iter().collect()
+    fn filtered_apps(&mut self) -> Vec<&ApplicationInfo> {
+        // Vérifier si on doit recalculer le cache
+        if self.last_query != self.query_lower {
+            self.last_query = self.query_lower.clone();
+            
+            if self.query.is_empty() {
+                self.filtered_cache = None;
+            } else {
+                let indices: Vec<usize> = self.applications
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, app)| app.name_lower.contains(&self.query_lower))
+                    .map(|(i, _)| i)
+                    .collect();
+                self.filtered_cache = Some(indices);
+            }
+        }
+        
+        // Retourner les résultats depuis le cache
+        if let Some(ref indices) = self.filtered_cache {
+            indices.iter().map(|&i| &self.applications[i]).collect()
         } else {
-            self.applications
-                .iter()
-                .filter(|app| {
-                    app.name
-                        .to_lowercase()
-                        .contains(&self.query.to_lowercase())
-                })
-                .collect()
+            self.applications.iter().collect()
         }
     }
 }
 
 impl Render for Launcher {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Extraire toutes les valeurs nécessaires AVANT filtered_apps
+        let selected_index = self.selected_index;
+        let query_text = self.query.to_string();
+        let focus_handle = self.focus_handle.clone();
+        
+        // Maintenant on peut appeler filtered_apps
+        let filtered_apps = self.filtered_apps();
+        let start_index = if selected_index >= 10 { selected_index - 9 } else { 0 };
+
         div()
-            .track_focus(&self.focus_handle)
+            .track_focus(&focus_handle)
             .size_full()
             .bg(rgb(0x2e3440))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
@@ -96,7 +124,8 @@ impl Render for Launcher {
                     if key_char.is_alphanumeric() || key_char == ' ' {
                         let mut query = this.query.to_string();
                         query.push(key_char);
-                        this.query = query.into();
+                        this.query = query.clone().into();
+                        this.query_lower = query.to_lowercase();
                         this.selected_index = 0;
                         cx.notify();
                     }
@@ -117,17 +146,14 @@ impl Render for Launcher {
                             .bg(rgb(0x3b4252))
                             .rounded_md()
                             .text_color(rgb(0xeceff4))
-                            .child(format!("Search: {}", self.query))
+                            .child(format!("Search: {}", query_text))
                     )
                     .child(
                         div()
                             .flex()
                             .flex_col()
                             .mt_2()
-                            .children({
-                                let filtered_apps = self.filtered_apps();
-                                let start_index = if self.selected_index >= 10 { self.selected_index - 9 } else { 0 };
-                                
+                            .children(
                                 filtered_apps
                                     .into_iter()
                                     .enumerate()
@@ -140,7 +166,7 @@ impl Render for Launcher {
                                             .p_2()
                                             .text_color(rgb(0xeceff4));
                                         
-                                        if i == self.selected_index {
+                                        if i == selected_index {
                                             item = item.bg(rgb(0x88c0d0));
                                         }
                                         
@@ -164,7 +190,7 @@ impl Render for Launcher {
                                                 .child(app.name.clone())
                                         )
                                     })
-                            })
+                            )
                     )
             )
     }
