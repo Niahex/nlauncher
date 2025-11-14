@@ -4,45 +4,6 @@ use gpui::{
     WindowOptions, div, img, layer_shell::*, point, prelude::*, px, rgb,
 };
 use std::process::Command;
-use std::path::Path;
-
-fn resolve_icon_path(icon_name: &str) -> Option<String> {
-    let icon_dirs = [
-        "/run/current-system/sw/share/icons/Nordzy/apps/scalable",
-        "/run/current-system/sw/share/icons/hicolor",
-        "/run/current-system/sw/share/icons/Nordic-bluish/apps/scalable",
-        "/home/nia/.local/share/icons", 
-        "/usr/share/icons",
-        "/usr/share/pixmaps",
-    ];
-    
-    // Essayer d'abord les SVG scalables
-    for dir in &icon_dirs[..3] {
-        let path = format!("{}/{}.svg", dir, icon_name);
-        if Path::new(&path).exists() {
-            return Some(path);
-        }
-    }
-    
-    // Puis les PNG dans hicolor
-    let sizes = ["48", "32", "24", "16"];
-    for size in &sizes {
-        let path = format!("/run/current-system/sw/share/icons/hicolor/{}x{}/apps/{}.png", size, size, icon_name);
-        if Path::new(&path).exists() {
-            return Some(path);
-        }
-    }
-    
-    // Fallback pixmaps
-    for ext in &["png", "svg", "xpm"] {
-        let path = format!("/usr/share/pixmaps/{}.{}", icon_name, ext);
-        if Path::new(&path).exists() {
-            return Some(path);
-        }
-    }
-    
-    None
-}
 
 mod applications;
 mod state;
@@ -166,11 +127,14 @@ impl Render for Launcher {
                             .flex()
                             .flex_col()
                             .mt_2()
-                            .children(
+                            .children({
+                                let filtered_apps = filtered_apps.clone();
+                                let start_index = if self.selected_index >= 10 { self.selected_index - 9 } else { 0 };
+                                
                                 filtered_apps
                                     .into_iter()
                                     .enumerate()
-                                    .skip(if self.selected_index >= 10 { self.selected_index - 9 } else { 0 })
+                                    .skip(start_index)
                                     .take(10)
                                     .map(|(i, app)| {
                                         let mut item = div()
@@ -189,17 +153,10 @@ impl Render for Launcher {
                                                 .items_center()
                                                 .gap_2()
                                                 .child(
-                                                    if let Some(icon_name) = &app.icon {
-                                                        if let Some(icon_path) = resolve_icon_path(icon_name) {
-                                                            div()
-                                                                .size_6()
-                                                                .child(img(icon_path).size_6())
-                                                        } else {
-                                                            div()
-                                                                .size_6()
-                                                                .bg(rgb(0x5e81ac))
-                                                                .rounded_sm()
-                                                        }
+                                                    if let Some(icon_path) = &app.icon_path {
+                                                        div()
+                                                            .size_6()
+                                                            .child(img(std::path::PathBuf::from(icon_path)).size_6())
                                                     } else {
                                                         div()
                                                             .size_6()
@@ -210,7 +167,7 @@ impl Render for Launcher {
                                                 .child(app.name.clone())
                                         )
                                     })
-                            )
+                            })
                     )
             )
     }

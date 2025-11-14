@@ -1,5 +1,6 @@
 use crate::state::ApplicationInfo;
 use freedesktop_desktop_entry::{DesktopEntry, Iter};
+use freedesktop_icons::lookup;
 use std::fs;
 
 pub fn load_applications() -> Vec<ApplicationInfo> {
@@ -10,10 +11,15 @@ pub fn load_applications() -> Vec<ApplicationInfo> {
             if let Ok(desktop_entry) = DesktopEntry::decode(&path, &content) {
                 if let Some(name) = desktop_entry.name(None) {
                     if let Some(exec) = desktop_entry.exec() {
+                        let icon_path = desktop_entry.icon()
+                            .and_then(|icon_name| lookup(icon_name).with_size(24).find())
+                            .map(|p| p.to_string_lossy().to_string());
+                        
                         applications.push(ApplicationInfo {
                             name: name.to_string(),
                             exec: exec.to_string(),
                             icon: desktop_entry.icon().map(|s| s.to_string()),
+                            icon_path,
                         });
                     }
                 }
