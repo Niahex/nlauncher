@@ -190,14 +190,26 @@ impl Render for Launcher {
             .items_center()
             .justify_center()
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
-                if let Some(key_char) = event.keystroke.key.chars().next() {
-                    if key_char.is_alphanumeric() || key_char == ' ' || "+-*/()^.=".contains(key_char) {
+                match event.keystroke.key.as_str() {
+                    " " => {
                         let mut query = this.query.to_string();
-                        query.push(key_char);
+                        query.push(' ');
                         this.query = query.into();
                         this.update_search_results();
                         cx.notify();
                     }
+                    key if key.len() == 1 => {
+                        if let Some(key_char) = key.chars().next() {
+                            if key_char.is_alphanumeric() || "+-*/()^.=".contains(key_char) {
+                                let mut query = this.query.to_string();
+                                query.push(key_char);
+                                this.query = query.into();
+                                this.update_search_results();
+                                cx.notify();
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }))
             .on_action(cx.listener(Self::backspace))
@@ -216,6 +228,8 @@ impl Render for Launcher {
                     .flex()
                     .flex_col()
                     .p_4()
+                    .opacity(0.95)
+                    .hover(|style| style.opacity(1.0))
                     .child(
                         div()
                             .p_2()
@@ -242,10 +256,12 @@ impl Render for Launcher {
                                             .flex()
                                             .items_center()
                                             .p_2()
-                                            .text_color(rgb(0xeceff4));
+                                            .text_color(rgb(0xeceff4))
+                                            .rounded_md()
+                                            .hover(|style| style.bg(rgb(0x434c5e)));
                                         
                                         if original_index == selected_index {
-                                            item = item.bg(rgb(0x88c0d0));
+                                            item = item.bg(rgb(0x88c0d0)).text_color(rgb(0x2e3440));
                                         }
                                         
                                         match result {
