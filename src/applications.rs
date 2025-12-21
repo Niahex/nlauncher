@@ -94,10 +94,17 @@ fn scan_applications() -> Vec<ApplicationInfo> {
                                     .and_then(|icon_name| lookup(icon_name).with_size(24).find())
                                     .map(|p| p.to_string_lossy().to_string());
                                 
+                                // Nettoyer la commande exec des placeholders .desktop
+                                let exec_clean = exec
+                                    .split_whitespace()
+                                    .filter(|part| !part.starts_with('%'))
+                                    .collect::<Vec<_>>()
+                                    .join(" ");
+                                
                                 local_apps.push(ApplicationInfo {
                                     name: name.to_string(),
                                     name_lower: name.to_lowercase(),
-                                    exec: exec.to_string(),
+                                    exec: exec_clean,
                                     icon: desktop_entry.icon().map(|s| s.to_string()),
                                     icon_path,
                                 });
