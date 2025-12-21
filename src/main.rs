@@ -242,114 +242,104 @@ impl Render for Launcher {
                             .text_color(rgb(0xeceff4))
                             .child(format!("Search: {query_text}")),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .mt_2()
-                            .children({
-                                let visible_items = 10;
-                                self.search_results
-                                    .iter()
-                                    .enumerate()
-                                    .skip(self.scroll_offset)
-                                    .take(visible_items)
-                                    .map(|(original_index, result)| {
-                                        let mut item = div()
-                                            .flex()
-                                            .items_center()
-                                            .p_2()
-                                            .text_color(rgb(0xeceff4))
-                                            .rounded_md()
-                                            .hover(|style| style.bg(rgb(0x434c5e)));
+                    .child(div().flex().flex_col().mt_2().children({
+                        let visible_items = 10;
+                        self.search_results
+                            .iter()
+                            .enumerate()
+                            .skip(self.scroll_offset)
+                            .take(visible_items)
+                            .map(|(original_index, result)| {
+                                let mut item = div()
+                                    .flex()
+                                    .items_center()
+                                    .p_2()
+                                    .text_color(rgb(0xeceff4))
+                                    .rounded_md()
+                                    .hover(|style| style.bg(rgb(0x434c5e)));
 
-                                        if original_index == selected_index {
-                                            item = item.bg(rgb(0x88c0d0)).text_color(rgb(0x2e3440));
-                                        }
+                                if original_index == selected_index {
+                                    item = item.bg(rgb(0x88c0d0)).text_color(rgb(0x2e3440));
+                                }
 
-                                        match result {
-                                            SearchResult::Application(app_index) => {
-                                                if let Some(app) = self.applications.get(*app_index)
-                                                {
-                                                    item.child(
-                                                        div()
-                                                            .flex()
-                                                            .items_center()
-                                                            .gap_2()
-                                                            .child(
-                                                                if let Some(icon_path) =
-                                                                    &app.icon_path
-                                                                {
-                                                                    div().size_6().child(
+                                match result {
+                                    SearchResult::Application(app_index) => {
+                                        if let Some(app) = self.applications.get(*app_index) {
+                                            item.child(
+                                                div()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap_2()
+                                                    .child(
+                                                        if let Some(icon_path) = &app.icon_path {
+                                                            div().size_6().child(
                                                                 img(std::path::PathBuf::from(
                                                                     icon_path,
                                                                 ))
                                                                 .size_6(),
                                                             )
-                                                                } else {
-                                                                    div()
-                                                                        .size_6()
-                                                                        .bg(rgb(0x5e81ac))
-                                                                        .rounded_sm()
-                                                                },
-                                                            )
-                                                            .child(app.name.clone()),
+                                                        } else {
+                                                            div()
+                                                                .size_6()
+                                                                .bg(rgb(0x5e81ac))
+                                                                .rounded_sm()
+                                                        },
                                                     )
-                                                } else {
-                                                    item.child("Invalid app")
-                                                }
-                                            }
-                                            SearchResult::Calculation(calc_result) => item.child(
+                                                    .child(app.name.clone()),
+                                            )
+                                        } else {
+                                            item.child("Invalid app")
+                                        }
+                                    }
+                                    SearchResult::Calculation(calc_result) => item.child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .size_6()
+                                                    .bg(rgb(0xa3be8c))
+                                                    .rounded_sm()
+                                                    .child("="),
+                                            )
+                                            .child(format!("= {calc_result}")),
+                                    ),
+                                    SearchResult::Process(process) => item.child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .size_6()
+                                                    .bg(rgb(0xbf616a))
+                                                    .rounded_sm()
+                                                    .child("⚡"),
+                                            )
+                                            .child(
                                                 div()
                                                     .flex()
-                                                    .items_center()
-                                                    .gap_2()
+                                                    .flex_col()
+                                                    .child(format!(
+                                                        "{} ({})",
+                                                        process.name, process.pid
+                                                    ))
                                                     .child(
                                                         div()
-                                                            .size_6()
-                                                            .bg(rgb(0xa3be8c))
-                                                            .rounded_sm()
-                                                            .child("="),
-                                                    )
-                                                    .child(format!("= {calc_result}")),
-                                            ),
-                                            SearchResult::Process(process) => item.child(
-                                                div()
-                                                    .flex()
-                                                    .items_center()
-                                                    .gap_2()
-                                                    .child(
-                                                        div()
-                                                            .size_6()
-                                                            .bg(rgb(0xbf616a))
-                                                            .rounded_sm()
-                                                            .child("⚡"),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .flex()
-                                                            .flex_col()
+                                                            .text_xs()
+                                                            .text_color(rgb(0x88c0d0))
                                                             .child(format!(
-                                                                "{} ({})",
-                                                                process.name, process.pid
-                                                            ))
-                                                            .child(
-                                                                div()
-                                                                    .text_xs()
-                                                                    .text_color(rgb(0x88c0d0))
-                                                                    .child(format!(
                                                                 "CPU: {:.1}% | RAM: {:.1}MB",
                                                                 process.cpu_usage,
                                                                 process.memory_mb
                                                             )),
-                                                            ),
                                                     ),
                                             ),
-                                        }
-                                    },
-                                )
-                            }),
-                    ),
+                                    ),
+                                }
+                            })
+                    })),
             )
     }
 }
