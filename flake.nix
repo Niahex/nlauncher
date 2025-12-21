@@ -8,6 +8,17 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
+  nixConfig = {
+    extra-substituters = [
+      "https://nix-community.cachix.org"
+      "https://cache.nixos.org"
+    ];
+    extra-trusted-public-keys = [
+      "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+    ];
+  };
+
   outputs = {
     self,
     nixpkgs,
@@ -68,8 +79,10 @@
 
         # Dependencies needed only at runtime
         runtimeDependencies = with pkgs; [
+          wayland
           vulkan-loader
           mesa
+          libxkbcommon
         ];
 
         nativeBuildInputs = with pkgs; [
@@ -90,10 +103,15 @@
 
         # Application package definition
         nlauncher = craneLib.buildPackage {
-          inherit src cargoArtifacts buildInputs nativeBuildInputs runtimeDependencies;
+          inherit src cargoArtifacts buildInputs nativeBuildInputs;
           env = envVars;
           pname = "nlauncher";
           version = "0.1.0";
+          
+          postInstall = ''
+            wrapProgram $out/bin/nlauncher \
+              --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath runtimeDependencies}
+          '';
         };
 
         # Development shell tools
