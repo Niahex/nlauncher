@@ -9,13 +9,11 @@ mod applications;
 mod calculator;
 mod fuzzy;
 mod process;
-mod scroll;
 mod state;
 use applications::load_applications;
 use calculator::{is_calculator_query, Calculator};
 use fuzzy::FuzzyMatcher;
 use process::{get_running_processes, is_process_query, kill_process, ProcessInfo};
-use scroll::ScrollState;
 use state::ApplicationInfo;
 
 actions!(launcher, [Quit, Backspace, Up, Down, Launch]);
@@ -34,7 +32,6 @@ struct Launcher {
     fuzzy_matcher: FuzzyMatcher,
     calculator: Calculator,
     search_results: Vec<SearchResult>,
-    scroll_state: ScrollState,
 }
 
 impl Launcher {
