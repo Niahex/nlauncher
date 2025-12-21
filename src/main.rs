@@ -223,16 +223,14 @@ impl Render for Launcher {
                 div()
                     .w(px(700.))
                     .max_h(px(500.))
-                    .bg(rgb(0x2e3440)) // polar night 0 (le plus foncé)
+                    .bg(rgba(0x2e3440dd)) // polar night 0 avec plus d'opacité pour voir le blur
                     .border_1()
-                    .border_color(rgb(0x4c566a))
+                    .border_color(rgba(0x88c0d033)) // frost1 à 20%
                     .rounded_lg()
                     .shadow_lg()
                     .flex()
                     .flex_col()
                     .p_4()
-                    .opacity(0.95)
-                    .hover(|style| style.opacity(1.0))
                     .child(
                         div()
                             .p_2()
@@ -373,7 +371,7 @@ fn main() {
                         size: Size::new(px(800.), px(600.)),
                     })),
                     app_id: Some("nlauncher".to_string()),
-                    window_background: WindowBackgroundAppearance::Transparent,
+                    window_background: WindowBackgroundAppearance::Blurred,
                     kind: WindowKind::LayerShell(LayerShellOptions {
                         namespace: "nlauncher".to_string(),
                         anchor: Anchor::empty(),
