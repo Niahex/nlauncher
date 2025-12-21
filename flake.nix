@@ -28,10 +28,30 @@
         };
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
-        src = craneLib.cleanCargoSource ./.;
+
+        unfilteredRoot = ./.;
+        src = pkgs.lib.fileset.toSource {
+          root = unfilteredRoot;
+          fileset = pkgs.lib.fileset.unions [
+            (craneLib.fileset.commonCargoSources unfilteredRoot)
+            (pkgs.lib.fileset.fileFilter (
+                file:
+                  pkgs.lib.any file.hasExt [
+                    "svg"
+                  ]
+              )
+              unfilteredRoot)
+            (pkgs.lib.fileset.maybeMissing ./assets)
+          ];
+        };
 
         # Dependencies for building the application
         buildInputs = with pkgs; [
+          wayland
+          vulkan-loader
+          vulkan-validation-layers
+          vulkan-tools
+          mesa
           xorg.libxcb
           xorg.libX11
           libxkbcommon
@@ -48,8 +68,8 @@
 
         # Dependencies needed only at runtime
         runtimeDependencies = with pkgs; [
-          wayland
           vulkan-loader
+          mesa
         ];
 
         nativeBuildInputs = with pkgs; [
@@ -107,11 +127,14 @@
           nativeBuildInputs = devTools;
           env = envVars;
           
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (buildInputs ++ runtimeDependencies);
-          FONTCONFIG_FILE = pkgs.makeFontsConf { fontDirectories = buildInputs; };
+          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath (buildInputs ++ runtimeDependencies)}:/run/opengl/driver/lib:/run/opengl/lib";
+          FONTCONFIG_FILE = pkgs.makeFontsConf {fontDirectories = buildInputs;};
 
           shellHook = ''
             echo "[🦀 Rust $(rustc --version)] - Ready to develop nlauncher!"
+            echo "Vulkan ICD: $VK_ICD_FILENAMES"
+            echo "Available Vulkan devices:"
+            vulkaninfo --summary 2>/dev/null | grep -A 2 "GPU" || echo "  Run 'vulkaninfo' for details"
           '';
         };
 
