@@ -1,5 +1,5 @@
 use gpui::{
-    actions, div, img, layer_shell::*, point, prelude::*, px, rgb, App, Application, Bounds,
+    actions, div, img, layer_shell::*, point, prelude::*, px, rgb, rgba, App, Application, Bounds,
     Context, FocusHandle, KeyBinding, KeyDownEvent, Render, SharedString, Size, Window,
     WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
 };
@@ -189,7 +189,6 @@ impl Render for Launcher {
         div()
             .track_focus(&focus_handle)
             .size_full()
-            .bg(rgb(0x2e3440))
             .flex()
             .items_center()
             .justify_center()
@@ -224,7 +223,7 @@ impl Render for Launcher {
                 div()
                     .w(px(700.))
                     .max_h(px(500.))
-                    .bg(rgb(0x2e3440))
+                    .bg(rgb(0x2e3440)) // polar night 0 (le plus foncé)
                     .border_1()
                     .border_color(rgb(0x4c566a))
                     .rounded_lg()
@@ -239,8 +238,16 @@ impl Render for Launcher {
                             .p_2()
                             .bg(rgb(0x3b4252))
                             .rounded_md()
-                            .text_color(rgb(0xeceff4))
-                            .child(format!("Search: {query_text}")),
+                            .text_color(if query_text.is_empty() {
+                                rgba(0xd8dee966) // snow1 à 40%
+                            } else {
+                                rgb(0xeceff4) // snow3
+                            })
+                            .child(if query_text.is_empty() {
+                                "Search for apps and commands".to_string()
+                            } else {
+                                query_text.clone()
+                            }),
                     )
                     .child(div().flex().flex_col().mt_2().children({
                         let visible_items = 10;
@@ -254,12 +261,14 @@ impl Render for Launcher {
                                     .flex()
                                     .items_center()
                                     .p_2()
-                                    .text_color(rgb(0xeceff4))
+                                    .text_color(rgb(0xd8dee9)) // snow1
                                     .rounded_md()
                                     .hover(|style| style.bg(rgb(0x434c5e)));
 
                                 if original_index == selected_index {
-                                    item = item.bg(rgb(0x88c0d0)).text_color(rgb(0x2e3440));
+                                    item = item
+                                        .bg(rgba(0x88c0d033)) // frost1 à 20%
+                                        .text_color(rgb(0x88c0d0)); // frost1 à 100%
                                 }
 
                                 match result {
