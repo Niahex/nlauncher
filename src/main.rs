@@ -45,7 +45,6 @@ impl Launcher {
             fuzzy_matcher: FuzzyMatcher::new(),
             calculator: Calculator::new(),
             search_results: Vec::new(),
-            scroll_state: ScrollState::new(px(40.0)), // hauteur d'un item
         };
         launcher.update_search_results();
         launcher
@@ -86,13 +85,8 @@ impl Launcher {
             }
         }
 
-        // Mettre à jour le scroll state
-        self.scroll_state
-            .update_item_count(self.search_results.len());
-
         // Réinitialiser la sélection
         self.selected_index = 0;
-        self.scroll_state.scroll_to_reveal_item(0, 10);
     }
 
     fn backspace(&mut self, _: &Backspace, _: &mut Window, cx: &mut Context<Self>) {
@@ -108,8 +102,6 @@ impl Launcher {
     fn up(&mut self, _: &Up, _: &mut Window, cx: &mut Context<Self>) {
         if !self.search_results.is_empty() && self.selected_index > 0 {
             self.selected_index -= 1;
-            self.scroll_state
-                .scroll_to_reveal_item(self.selected_index, 10);
             cx.notify();
         }
     }
@@ -117,8 +109,6 @@ impl Launcher {
     fn down(&mut self, _: &Down, _: &mut Window, cx: &mut Context<Self>) {
         if !self.search_results.is_empty() && self.selected_index + 1 < self.search_results.len() {
             self.selected_index += 1;
-            self.scroll_state
-                .scroll_to_reveal_item(self.selected_index, 10);
             cx.notify();
         }
     }
@@ -243,13 +233,9 @@ impl Render for Launcher {
                             .child(format!("Search: {query_text}")),
                     )
                     .child(div().flex().flex_col().mt_2().children({
-                        let visible_range = self.scroll_state.visible_range();
-
                         self.search_results
                             .iter()
                             .enumerate()
-                            .skip(visible_range.start)
-                            .take(visible_range.len())
                             .map(|(original_index, result)| {
                                 let mut item = div()
                                     .flex()
@@ -346,8 +332,6 @@ impl Render for Launcher {
 }
 
 fn main() {
-    env_logger::init();
-
     Application::new().run(|cx: &mut App| {
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([

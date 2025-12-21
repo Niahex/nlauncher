@@ -1,8 +1,8 @@
 use crate::state::ApplicationInfo;
-use nucleo::{Config, Nucleo};
+use nucleo::{Config, Nucleo, Utf32String};
 
 pub struct FuzzyMatcher {
-    _matcher: Nucleo<usize>,
+    matcher: Nucleo<usize>,
 }
 
 impl Default for FuzzyMatcher {
@@ -15,7 +15,7 @@ impl FuzzyMatcher {
     pub fn new() -> Self {
         let config = Config::DEFAULT;
         let matcher = Nucleo::new(config, std::sync::Arc::new(|| {}), None, 1);
-        Self { _matcher: matcher }
+        Self { matcher }
     }
 
     pub fn search(&mut self, query: &str, apps: &[ApplicationInfo]) -> Vec<usize> {
@@ -23,33 +23,43 @@ impl FuzzyMatcher {
             return (0..apps.len()).collect();
         }
 
-        // Pour l'instant, utilisons une recherche simple mais efficace
-        // TODO: Implémenter nucleo correctement quand on aura plus de temps
-        let query_lower = query.to_lowercase();
-        let mut results: Vec<(usize, i32)> = apps
-            .iter()
-            .enumerate()
-            .filter_map(|(i, app)| {
-                let name_lower = app.name.to_lowercase();
-                if name_lower.contains(&query_lower) {
-                    // Score simple : plus la correspondance est au début, meilleur c'est
-                    let score = if name_lower.starts_with(&query_lower) {
-                        1000
-                    } else if let Some(pos) = name_lower.find(&query_lower) {
-                        1000 - pos as i32
-                    } else {
-                        0
-                    };
-                    Some((i, score))
-                } else {
-                    None
-                }
-            })
-            .collect();
+        // Réinitialiser le matcher
+        self.matcher.restart(false);
 
-        // Trier par score décroissant
-        results.sort_by(|a, b| b.1.cmp(&a.1));
+        // Injecter les applications
+        let injector = self.matcher.injector();
+        for (i, app) in apps.iter().enumerate() {
+            let name = Utf32String::from(app.name.as_str());
+            let _ = injector.push(i, |cols| cols[0] = name.clone());
+        }
 
-        results.into_iter().map(|(i, _)| i).collect()
+        // Parser le pattern et lancer la recherche
+        let _pattern = nucleo::pattern::Pattern::parse(
+            query,
+            nucleo::pattern::CaseMatching::Ignore,
+            nucleo::pattern::Normalization::Smart,
+        );
+        self.matcher.pattern.reparse(
+            0,
+            query,
+            nucleo::pattern::CaseMatching::Ignore,
+            nucleo::pattern::Normalization::Smart,
+            false,
+        );
+
+        // Attendre que le matching soit terminé
+        self.matcher.tick(10);
+
+        // Récupérer les résultats
+        let snapshot = self.matcher.snapshot();
+        let mut results: Vec<usize> = Vec::new();
+
+        for i in 0..snapshot.matched_item_count() {
+            if let Some(item) = snapshot.get_matched_item(i) {
+                results.push(*item.data);
+            }
+        }
+
+        results
     }
 }

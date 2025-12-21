@@ -57,17 +57,14 @@ pub fn is_calculator_query(query: &str) -> bool {
     }
 
     // Vérifier les patterns de calcul
-    let math_patterns = [
-        r"\d+\s*[\+\-\*/\^]\s*\d+", // 2+2, 5*3, etc.
-        r"\d+\s*\w+",               // 5km, 100USD, etc.
-        r"^\d+\.?\d*$",             // nombres simples
-    ];
+    // Vérifier si c'est une expression mathématique simple
+    let has_operator = trimmed.contains('+')
+        || trimmed.contains('-')
+        || trimmed.contains('*')
+        || trimmed.contains('/')
+        || trimmed.contains('^');
 
-    for pattern in &math_patterns {
-        if regex::Regex::new(pattern).unwrap().is_match(trimmed) {
-            return true;
-        }
-    }
+    let has_digit = trimmed.chars().any(|c| c.is_ascii_digit());
 
-    false
+    has_operator && has_digit
 }
