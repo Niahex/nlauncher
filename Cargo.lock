@@ -3450,6 +3450,7 @@ dependencies = [
  "freedesktop-desktop-entry",
  "freedesktop-icons",
  "gpui",
+ "libc",
  "nucleo",
  "numbat",
  "serde",

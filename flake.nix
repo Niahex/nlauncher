@@ -8,17 +8,6 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
-  nixConfig = {
-    extra-substituters = [
-      "https://nix-community.cachix.org"
-      "https://cache.nixos.org"
-    ];
-    extra-trusted-public-keys = [
-      "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
-      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-    ];
-  };
-
   outputs = {
     self,
     nixpkgs,
@@ -90,7 +79,7 @@
           makeWrapper
           autoPatchelfHook
         ];
-        
+
         envVars = {
           RUST_BACKTRACE = "full";
         };
@@ -107,7 +96,7 @@
           env = envVars;
           pname = "nlauncher";
           version = "0.1.0";
-          
+
           postInstall = ''
             wrapProgram $out/bin/nlauncher \
               --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath runtimeDependencies}
@@ -144,7 +133,7 @@
           inputsFrom = [nlauncher];
           nativeBuildInputs = devTools;
           env = envVars;
-          
+
           LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath (buildInputs ++ runtimeDependencies)}:/run/opengl/driver/lib:/run/opengl/lib";
           FONTCONFIG_FILE = pkgs.makeFontsConf {fontDirectories = buildInputs;};
 

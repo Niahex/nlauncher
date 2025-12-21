@@ -4,6 +4,8 @@ use gpui::{
     WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
 };
 use std::process::Command;
+use std::fs;
+use std::path::PathBuf;
 
 mod applications;
 mod calculator;
@@ -351,8 +353,59 @@ impl Render for Launcher {
     }
 }
 
+fn get_lock_path() -> PathBuf {
+    let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
+        .unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(runtime_dir).join("nlauncher.lock")
+}
+
+fn is_running() -> bool {
+    let lock_path = get_lock_path();
+    if !lock_path.exists() {
+        return false;
+    }
+    
+    // Lire le PID du fichier lock
+    if let Ok(pid_str) = fs::read_to_string(&lock_path) {
+        if let Ok(pid) = pid_str.trim().parse::<i32>() {
+            // Vérifier si le processus existe
+            return std::path::Path::new(&format!("/proc/{}", pid)).exists();
+        }
+    }
+    false
+}
+
+fn create_lock() {
+    let lock_path = get_lock_path();
+    let pid = std::process::id();
+    let _ = fs::write(lock_path, pid.to_string());
+}
+
+fn remove_lock() {
+    let lock_path = get_lock_path();
+    let _ = fs::remove_file(lock_path);
+}
+
 fn main() {
-    Application::new().run(|cx: &mut App| {
+    // Vérifier si une instance est déjà en cours
+    if is_running() {
+        // Envoyer un signal pour fermer l'instance existante
+        if let Ok(pid_str) = fs::read_to_string(get_lock_path()) {
+            if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                unsafe {
+                    libc::kill(pid, libc::SIGTERM);
+                }
+            }
+        }
+        std::process::exit(0);
+    }
+    
+    // Créer le lock
+    create_lock();
+    
+    // Nettoyer le lock à la sortie
+    let _ = std::panic::catch_unwind(|| {
+        Application::new().run(|cx: &mut App| {
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([
             KeyBinding::new("backspace", Backspace, None),
@@ -391,5 +444,9 @@ fn main() {
                 cx.activate(true);
             })
             .unwrap();
+        });
     });
+    
+    // Nettoyer le lock
+    remove_lock();
 }
