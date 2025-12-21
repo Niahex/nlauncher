@@ -371,7 +371,7 @@ fn main() {
                         size: Size::new(px(800.), px(600.)),
                     })),
                     app_id: Some("nlauncher".to_string()),
-                    window_background: WindowBackgroundAppearance::Blurred,
+                    window_background: WindowBackgroundAppearance::Transparent,
                     kind: WindowKind::LayerShell(LayerShellOptions {
                         namespace: "nlauncher".to_string(),
                         anchor: Anchor::empty(),

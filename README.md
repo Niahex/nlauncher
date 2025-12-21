@@ -1,6 +1,6 @@
 # nlauncher
 
-A fast, modern application launcher built with GPUI and Rust, featuring a beautiful Nord-themed UI with blur effects.
+A fast, modern application launcher built with GPUI and Rust, featuring a beautiful Nord-themed UI.
 
 ## Features
 
@@ -12,7 +12,7 @@ A fast, modern application launcher built with GPUI and Rust, featuring a beauti
 
 ### 🎨 Modern UI
 - **Nord Dark Theme**: Beautiful color palette with Polar Night backgrounds and Frost accents
-- **Blur Effects**: Transparent window with blur support (compositor-dependent)
+- **Transparent Window**: Clean, modern appearance with transparency support
 - **Smooth Animations**: Hover effects and smooth transitions
 - **Keyboard Navigation**: Full keyboard control with arrow keys and Enter
 
@@ -72,12 +72,7 @@ Type mathematical expressions directly:
 
 ## Configuration
 
-### Hyprland Blur
-To enable blur effects in Hyprland, add to `~/.config/hypr/hyprland.conf`:
-
-```conf
-layerrule = blur, nlauncher
-```
+The launcher works out of the box with no configuration needed.
 
 ## Architecture
 
