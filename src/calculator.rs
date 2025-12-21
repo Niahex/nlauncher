@@ -1,14 +1,20 @@
-use numbat::{Context, InterpreterResult, module_importer::BuiltinModuleImporter};
+use numbat::{module_importer::BuiltinModuleImporter, Context, InterpreterResult};
 
 pub struct Calculator {
     context: Context,
+}
+
+impl Default for Calculator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Calculator {
     pub fn new() -> Self {
         let importer = BuiltinModuleImporter::default();
         let context = Context::new(importer);
-        
+
         Self { context }
     }
 
@@ -18,10 +24,11 @@ impl Calculator {
             return None;
         }
 
-        match self.context.interpret(expression, numbat::resolver::CodeSource::Text) {
-            Ok((_, InterpreterResult::Value(value))) => {
-                Some(format!("{}", value))
-            }
+        match self
+            .context
+            .interpret(expression, numbat::resolver::CodeSource::Text)
+        {
+            Ok((_, InterpreterResult::Value(value))) => Some(format!("{value}")),
             Ok((_, InterpreterResult::Continue)) => None,
             Err(_) => None,
         }
@@ -31,14 +38,14 @@ impl Calculator {
         // Vérifier si l'input contient des caractères mathématiques
         let math_chars = ['+', '-', '*', '/', '(', ')', '^', '='];
         let has_math = input.chars().any(|c| math_chars.contains(&c));
-        
+
         // Ou si c'est un nombre
         let is_number = input.trim().parse::<f64>().is_ok();
-        
+
         // Ou si ça contient des unités communes
         let common_units = ["km", "m", "cm", "kg", "g", "°C", "°F", "USD", "EUR"];
         let has_units = common_units.iter().any(|unit| input.contains(unit));
-        
+
         has_math || is_number || has_units
     }
 }
@@ -51,9 +58,9 @@ pub fn is_calculator_query(query: &str) -> bool {
 
     // Vérifier les patterns de calcul
     let math_patterns = [
-        r"\d+\s*[\+\-\*/\^]\s*\d+",  // 2+2, 5*3, etc.
-        r"\d+\s*\w+",                 // 5km, 100USD, etc.
-        r"^\d+\.?\d*$",               // nombres simples
+        r"\d+\s*[\+\-\*/\^]\s*\d+", // 2+2, 5*3, etc.
+        r"\d+\s*\w+",               // 5km, 100USD, etc.
+        r"^\d+\.?\d*$",             // nombres simples
     ];
 
     for pattern in &math_patterns {

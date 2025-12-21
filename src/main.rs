@@ -1,22 +1,22 @@
 use gpui::{
-    actions, App, Application, Bounds, Context, FocusHandle, KeyBinding, KeyDownEvent, Render,
-    SharedString, Size, Window, WindowBackgroundAppearance, WindowBounds, WindowKind,
-    WindowOptions, div, img, layer_shell::*, point, prelude::*, px, rgb,
+    actions, div, img, layer_shell::*, point, prelude::*, px, rgb, App, Application, Bounds,
+    Context, FocusHandle, KeyBinding, KeyDownEvent, Render, SharedString, Size, Window,
+    WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
 };
 use std::process::Command;
 
 mod applications;
-mod state;
-mod fuzzy;
 mod calculator;
-mod scroll;
+mod fuzzy;
 mod process;
+mod scroll;
+mod state;
 use applications::load_applications;
-use state::ApplicationInfo;
+use calculator::{is_calculator_query, Calculator};
 use fuzzy::FuzzyMatcher;
-use calculator::{Calculator, is_calculator_query};
+use process::{get_running_processes, is_process_query, kill_process, ProcessInfo};
 use scroll::ScrollState;
-use process::{ProcessInfo, get_running_processes, kill_process, is_process_query};
+use state::ApplicationInfo;
 
 actions!(launcher, [Quit, Backspace, Up, Down, Launch]);
 
@@ -90,8 +90,9 @@ impl Launcher {
         }
 
         // Mettre à jour le scroll state
-        self.scroll_state.update_item_count(self.search_results.len());
-        
+        self.scroll_state
+            .update_item_count(self.search_results.len());
+
         // Réinitialiser la sélection
         self.selected_index = 0;
         self.scroll_state.scroll_to_reveal_item(0, 10);
@@ -110,7 +111,8 @@ impl Launcher {
     fn up(&mut self, _: &Up, _: &mut Window, cx: &mut Context<Self>) {
         if !self.search_results.is_empty() && self.selected_index > 0 {
             self.selected_index -= 1;
-            self.scroll_state.scroll_to_reveal_item(self.selected_index, 10);
+            self.scroll_state
+                .scroll_to_reveal_item(self.selected_index, 10);
             cx.notify();
         }
     }
@@ -118,7 +120,8 @@ impl Launcher {
     fn down(&mut self, _: &Down, _: &mut Window, cx: &mut Context<Self>) {
         if !self.search_results.is_empty() && self.selected_index + 1 < self.search_results.len() {
             self.selected_index += 1;
-            self.scroll_state.scroll_to_reveal_item(self.selected_index, 10);
+            self.scroll_state
+                .scroll_to_reveal_item(self.selected_index, 10);
             cx.notify();
         }
     }
@@ -129,36 +132,40 @@ impl Launcher {
                 SearchResult::Application(app_index) => {
                     if let Some(app) = self.applications.get(*app_index) {
                         let exec = app.exec.clone();
-                        
+
                         std::thread::spawn(move || {
                             let mut cmd = Command::new("sh");
                             cmd.arg("-c")
-                               .arg(&exec)
-                               .env_clear()
-                               .env("PATH", std::env::var("PATH").unwrap_or_default())
-                               .env("HOME", std::env::var("HOME").unwrap_or_default())
-                               .env("USER", std::env::var("USER").unwrap_or_default())
-                               .env("XDG_RUNTIME_DIR", std::env::var("XDG_RUNTIME_DIR").unwrap_or_default())
-                               .env("WAYLAND_DISPLAY", std::env::var("WAYLAND_DISPLAY").unwrap_or_default())
-                               .env("DISPLAY", std::env::var("DISPLAY").unwrap_or_default())
-                               .stdin(std::process::Stdio::null())
-                               .stdout(std::process::Stdio::null())
-                               .stderr(std::process::Stdio::null());
-                            
+                                .arg(&exec)
+                                .env_clear()
+                                .env("PATH", std::env::var("PATH").unwrap_or_default())
+                                .env("HOME", std::env::var("HOME").unwrap_or_default())
+                                .env("USER", std::env::var("USER").unwrap_or_default())
+                                .env(
+                                    "XDG_RUNTIME_DIR",
+                                    std::env::var("XDG_RUNTIME_DIR").unwrap_or_default(),
+                                )
+                                .env(
+                                    "WAYLAND_DISPLAY",
+                                    std::env::var("WAYLAND_DISPLAY").unwrap_or_default(),
+                                )
+                                .env("DISPLAY", std::env::var("DISPLAY").unwrap_or_default())
+                                .stdin(std::process::Stdio::null())
+                                .stdout(std::process::Stdio::null())
+                                .stderr(std::process::Stdio::null());
+
                             if let Err(err) = cmd.spawn() {
-                                eprintln!("Failed to launch {}: {}", exec, err);
+                                eprintln!("Failed to launch {exec}: {err}");
                             }
                         });
-                        
+
                         cx.quit();
                     }
                 }
                 SearchResult::Calculation(result) => {
                     // Copier le résultat dans le presse-papiers
-                    if let Err(e) = std::process::Command::new("wl-copy")
-                        .arg(result)
-                        .output() {
-                        eprintln!("Failed to copy to clipboard: {}", e);
+                    if let Err(e) = std::process::Command::new("wl-copy").arg(result).output() {
+                        eprintln!("Failed to copy to clipboard: {e}");
                     }
                     cx.quit();
                 }
@@ -166,7 +173,7 @@ impl Launcher {
                     let pid = process.pid;
                     std::thread::spawn(move || {
                         if let Err(e) = kill_process(pid) {
-                            eprintln!("Failed to kill process: {}", e);
+                            eprintln!("Failed to kill process: {e}");
                         }
                     });
                     cx.quit();
@@ -236,114 +243,114 @@ impl Render for Launcher {
                             .bg(rgb(0x3b4252))
                             .rounded_md()
                             .text_color(rgb(0xeceff4))
-                            .child(format!("Search: {}", query_text))
+                            .child(format!("Search: {query_text}")),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .mt_2()
-                            .children({
-                                let visible_range = self.scroll_state.visible_range();
-                                
-                                self.search_results
-                                    .iter()
-                                    .enumerate()
-                                    .skip(visible_range.start)
-                                    .take(visible_range.len())
-                                    .map(|(original_index, result)| {
-                                        let mut item = div()
+                    .child(div().flex().flex_col().mt_2().children({
+                        let visible_range = self.scroll_state.visible_range();
+
+                        self.search_results
+                            .iter()
+                            .enumerate()
+                            .skip(visible_range.start)
+                            .take(visible_range.len())
+                            .map(|(original_index, result)| {
+                                let mut item = div()
+                                    .flex()
+                                    .items_center()
+                                    .p_2()
+                                    .text_color(rgb(0xeceff4))
+                                    .rounded_md()
+                                    .hover(|style| style.bg(rgb(0x434c5e)));
+
+                                if original_index == selected_index {
+                                    item = item.bg(rgb(0x88c0d0)).text_color(rgb(0x2e3440));
+                                }
+
+                                match result {
+                                    SearchResult::Application(app_index) => {
+                                        if let Some(app) = self.applications.get(*app_index) {
+                                            item.child(
+                                                div()
+                                                    .flex()
+                                                    .items_center()
+                                                    .gap_2()
+                                                    .child(
+                                                        if let Some(icon_path) = &app.icon_path {
+                                                            div().size_6().child(
+                                                                img(std::path::PathBuf::from(
+                                                                    icon_path,
+                                                                ))
+                                                                .size_6(),
+                                                            )
+                                                        } else {
+                                                            div()
+                                                                .size_6()
+                                                                .bg(rgb(0x5e81ac))
+                                                                .rounded_sm()
+                                                        },
+                                                    )
+                                                    .child(app.name.clone()),
+                                            )
+                                        } else {
+                                            item.child("Invalid app")
+                                        }
+                                    }
+                                    SearchResult::Calculation(calc_result) => item.child(
+                                        div()
                                             .flex()
                                             .items_center()
-                                            .p_2()
-                                            .text_color(rgb(0xeceff4))
-                                            .rounded_md()
-                                            .hover(|style| style.bg(rgb(0x434c5e)));
-                                        
-                                        if original_index == selected_index {
-                                            item = item.bg(rgb(0x88c0d0)).text_color(rgb(0x2e3440));
-                                        }
-                                        
-                                        match result {
-                                            SearchResult::Application(app_index) => {
-                                                if let Some(app) = self.applications.get(*app_index) {
-                                                    item.child(
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .size_6()
+                                                    .bg(rgb(0xa3be8c))
+                                                    .rounded_sm()
+                                                    .child("="),
+                                            )
+                                            .child(format!("= {calc_result}")),
+                                    ),
+                                    SearchResult::Process(process) => item.child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .size_6()
+                                                    .bg(rgb(0xbf616a))
+                                                    .rounded_sm()
+                                                    .child("⚡"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .flex_col()
+                                                    .child(format!(
+                                                        "{} ({})",
+                                                        process.name, process.pid
+                                                    ))
+                                                    .child(
                                                         div()
-                                                            .flex()
-                                                            .items_center()
-                                                            .gap_2()
-                                                            .child(
-                                                                if let Some(icon_path) = &app.icon_path {
-                                                                    div()
-                                                                        .size_6()
-                                                                        .child(img(std::path::PathBuf::from(icon_path)).size_6())
-                                                                } else {
-                                                                    div()
-                                                                        .size_6()
-                                                                        .bg(rgb(0x5e81ac))
-                                                                        .rounded_sm()
-                                                                }
-                                                            )
-                                                            .child(app.name.clone())
-                                                    )
-                                                } else {
-                                                    item.child("Invalid app")
-                                                }
-                                            }
-                                            SearchResult::Calculation(calc_result) => {
-                                                item.child(
-                                                    div()
-                                                        .flex()
-                                                        .items_center()
-                                                        .gap_2()
-                                                        .child(
-                                                            div()
-                                                                .size_6()
-                                                                .bg(rgb(0xa3be8c))
-                                                                .rounded_sm()
-                                                                .child("=")
-                                                        )
-                                                        .child(format!("= {}", calc_result))
-                                                )
-                                            }
-                                            SearchResult::Process(process) => {
-                                                item.child(
-                                                    div()
-                                                        .flex()
-                                                        .items_center()
-                                                        .gap_2()
-                                                        .child(
-                                                            div()
-                                                                .size_6()
-                                                                .bg(rgb(0xbf616a))
-                                                                .rounded_sm()
-                                                                .child("⚡")
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .flex()
-                                                                .flex_col()
-                                                                .child(format!("{} ({})", process.name, process.pid))
-                                                                .child(
-                                                                    div()
-                                                                        .text_xs()
-                                                                        .text_color(rgb(0x88c0d0))
-                                                                        .child(format!("CPU: {:.1}% | RAM: {:.1}MB", process.cpu_usage, process.memory_mb))
-                                                                )
-                                                        )
-                                                )
-                                            }
-                                        }
-                                    })
+                                                            .text_xs()
+                                                            .text_color(rgb(0x88c0d0))
+                                                            .child(format!(
+                                                                "CPU: {:.1}% | RAM: {:.1}MB",
+                                                                process.cpu_usage,
+                                                                process.memory_mb
+                                                            )),
+                                                    ),
+                                            ),
+                                    ),
+                                }
                             })
-                    )
+                    })),
             )
     }
 }
 
 fn main() {
     env_logger::init();
-    
+
     Application::new().run(|cx: &mut App| {
         cx.on_action(|_: &Quit, cx| cx.quit());
         cx.bind_keys([
@@ -354,30 +361,34 @@ fn main() {
             KeyBinding::new("escape", Quit, None),
         ]);
 
-        let window = cx.open_window(
-            WindowOptions {
-                titlebar: None,
-                window_bounds: Some(WindowBounds::Windowed(Bounds {
-                    origin: point(px(0.), px(0.)),
-                    size: Size::new(px(800.), px(600.)),
-                })),
-                app_id: Some("nlauncher".to_string()),
-                window_background: WindowBackgroundAppearance::Transparent,
-                kind: WindowKind::LayerShell(LayerShellOptions {
-                    namespace: "nlauncher".to_string(),
-                    anchor: Anchor::empty(),
-                    margin: Some((px(0.), px(0.), px(0.), px(0.))),
-                    keyboard_interactivity: KeyboardInteractivity::Exclusive,
+        let window = cx
+            .open_window(
+                WindowOptions {
+                    titlebar: None,
+                    window_bounds: Some(WindowBounds::Windowed(Bounds {
+                        origin: point(px(0.), px(0.)),
+                        size: Size::new(px(800.), px(600.)),
+                    })),
+                    app_id: Some("nlauncher".to_string()),
+                    window_background: WindowBackgroundAppearance::Transparent,
+                    kind: WindowKind::LayerShell(LayerShellOptions {
+                        namespace: "nlauncher".to_string(),
+                        anchor: Anchor::empty(),
+                        margin: Some((px(0.), px(0.), px(0.), px(0.))),
+                        keyboard_interactivity: KeyboardInteractivity::Exclusive,
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                ..Default::default()
-            },
-            |_, cx| cx.new(Launcher::new),
-        ).unwrap();
+                },
+                |_, cx| cx.new(Launcher::new),
+            )
+            .unwrap();
 
-        window.update(cx, |view, window, cx| {
-            window.focus(&view.focus_handle);
-            cx.activate(true);
-        }).unwrap();
+        window
+            .update(cx, |view, window, cx| {
+                window.focus(&view.focus_handle);
+                cx.activate(true);
+            })
+            .unwrap();
     });
 }

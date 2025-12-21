@@ -1,15 +1,21 @@
-use nucleo::{Config, Nucleo};
 use crate::state::ApplicationInfo;
+use nucleo::{Config, Nucleo};
 
 pub struct FuzzyMatcher {
-    matcher: Nucleo<usize>,
+    _matcher: Nucleo<usize>,
+}
+
+impl Default for FuzzyMatcher {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FuzzyMatcher {
     pub fn new() -> Self {
         let config = Config::DEFAULT;
         let matcher = Nucleo::new(config, std::sync::Arc::new(|| {}), None, 1);
-        Self { matcher }
+        Self { _matcher: matcher }
     }
 
     pub fn search(&mut self, query: &str, apps: &[ApplicationInfo]) -> Vec<usize> {
@@ -43,7 +49,7 @@ impl FuzzyMatcher {
 
         // Trier par score décroissant
         results.sort_by(|a, b| b.1.cmp(&a.1));
-        
+
         results.into_iter().map(|(i, _)| i).collect()
     }
 }

@@ -3,6 +3,7 @@ use gpui::*;
 #[derive(Clone, Debug)]
 pub struct ScrollOffset {
     pub item_index: usize,
+    #[allow(dead_code)]
     pub offset_in_item: Pixels,
 }
 
@@ -10,7 +11,7 @@ pub struct ScrollState {
     item_count: usize,
     visible_range: std::ops::Range<usize>,
     scroll_offset: ScrollOffset,
-    item_height: Pixels,
+    _item_height: Pixels,
 }
 
 impl ScrollState {
@@ -22,7 +23,7 @@ impl ScrollState {
                 item_index: 0,
                 offset_in_item: px(0.0),
             },
-            item_height,
+            _item_height: item_height,
         }
     }
 
@@ -39,16 +40,12 @@ impl ScrollState {
         }
 
         let half_visible = visible_items / 2;
-        
+
         // Calculer la nouvelle position de scroll pour centrer l'élément sélectionné
         let new_scroll_index = if index < half_visible {
             0
         } else if index + half_visible >= self.item_count {
-            if self.item_count > visible_items {
-                self.item_count - visible_items
-            } else {
-                0
-            }
+            self.item_count.saturating_sub(visible_items)
         } else {
             index - half_visible
         };
@@ -69,9 +66,5 @@ impl ScrollState {
 
     pub fn visible_range(&self) -> std::ops::Range<usize> {
         self.visible_range.clone()
-    }
-
-    pub fn scroll_offset(&self) -> &ScrollOffset {
-        &self.scroll_offset
     }
 }

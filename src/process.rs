@@ -1,5 +1,5 @@
-use std::process::Command;
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProcessInfo {
@@ -11,17 +11,12 @@ pub struct ProcessInfo {
 }
 
 pub fn get_running_processes() -> Vec<ProcessInfo> {
-    let output = Command::new("ps")
-        .args(&["aux", "--no-headers"])
-        .output();
+    let output = Command::new("ps").args(["aux", "--no-headers"]).output();
 
     match output {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            stdout
-                .lines()
-                .filter_map(|line| parse_ps_line(line))
-                .collect()
+            stdout.lines().filter_map(parse_ps_line).collect()
         }
         Err(_) => Vec::new(),
     }
@@ -37,7 +32,11 @@ fn parse_ps_line(line: &str) -> Option<ProcessInfo> {
     let cpu_usage = parts[2].parse::<f32>().unwrap_or(0.0);
     let memory_mb = parts[5].parse::<f32>().unwrap_or(0.0) / 1024.0; // KB to MB
     let command = parts[10..].join(" ");
-    let name = parts[10].split('/').last().unwrap_or(parts[10]).to_string();
+    let name = parts[10]
+        .split('/')
+        .next_back()
+        .unwrap_or(parts[10])
+        .to_string();
 
     Some(ProcessInfo {
         pid,
@@ -49,19 +48,17 @@ fn parse_ps_line(line: &str) -> Option<ProcessInfo> {
 }
 
 pub fn kill_process(pid: u32) -> Result<(), String> {
-    let output = Command::new("kill")
-        .arg(pid.to_string())
-        .output();
+    let output = Command::new("kill").arg(pid.to_string()).output();
 
     match output {
         Ok(output) => {
             if output.status.success() {
                 Ok(())
             } else {
-                Err(format!("Failed to kill process {}", pid))
+                Err(format!("Failed to kill process {pid}"))
             }
         }
-        Err(e) => Err(format!("Error killing process: {}", e)),
+        Err(e) => Err(format!("Error killing process: {e}")),
     }
 }
 
