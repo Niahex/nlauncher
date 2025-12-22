@@ -63,5 +63,5 @@ pub fn kill_process(pid: u32) -> Result<(), String> {
 }
 
 pub fn is_process_query(query: &str) -> bool {
-    query.starts_with("kill ") || query.starts_with("ps ") || query == "ps"
+    query.starts_with("kill ") || query.starts_with("ps")
 }

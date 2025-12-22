@@ -106,6 +106,13 @@ impl Launcher {
                 for process in processes.into_iter().take(20) {
                     self.search_results.push(SearchResult::Process(process));
                 }
+            } else if query_str.starts_with("ps ") {
+                let search_term = query_str.strip_prefix("ps ").unwrap_or("").to_lowercase();
+                for process in processes {
+                    if process.name.to_lowercase().contains(&search_term) {
+                        self.search_results.push(SearchResult::Process(process));
+                    }
+                }
             } else if query_str.starts_with("kill ") {
                 let search_term = query_str.strip_prefix("kill ").unwrap_or("").to_lowercase();
                 for process in processes {
@@ -230,7 +237,7 @@ impl Render for Launcher {
             .justify_center()
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                 match event.keystroke.key.as_str() {
-                    " " => {
+                    "space" => {
                         let mut query = this.query.to_string();
                         query.push(' ');
                         this.query = query.into();
