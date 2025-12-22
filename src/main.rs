@@ -415,7 +415,14 @@ impl Render for Launcher {
             .justify_center()
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                 if event.keystroke.key == "space" {
-                    let mut query = this.query.to_string();
+                    let query = this.query.to_string();
+                    
+                    // Bloquer l'espace en mode ps
+                    if query.starts_with("ps") {
+                        return;
+                    }
+                    
+                    let mut query = query;
                     query.push(' ');
                     
                     // Trigger vault reload if entering pass mode with active session
