@@ -130,8 +130,11 @@ impl Launcher {
         if query_str.starts_with("pass ") {
             let rest = query_str.strip_prefix("pass ").unwrap_or("");
             
-            // Filter cached entries (only in memory during session)
-            if !self.vault_entries.is_empty() {
+            // If vault is empty but session exists, show loading message
+            if self.vault_entries.is_empty() && self.vault_manager.is_unlocked() {
+                self.search_results.push(SearchResult::Calculation("Loading vault...".to_string()));
+            } else if !self.vault_entries.is_empty() {
+                // Filter cached entries
                 let search_lower = rest.to_lowercase();
                 for entry in &self.vault_entries {
                     if search_lower.is_empty() 
@@ -395,8 +398,31 @@ impl Render for Launcher {
                 if event.keystroke.key == "space" {
                     let mut query = this.query.to_string();
                     query.push(' ');
+                    
+                    // Trigger vault reload if entering pass mode with active session
+                    let should_reload = query == "pass " && this.vault_entries.is_empty() && this.vault_manager.is_unlocked();
+                    
                     this.query = query.into();
                     this.update_search_results();
+                    
+                    if should_reload {
+                        let vault_manager = this.vault_manager.clone();
+                        cx.spawn(async move |this, cx| {
+                            let result = background_executor().spawn(async move {
+                                vault_manager.load_from_session()
+                            }).await;
+                            
+                            if let Ok(entries) = result {
+                                this.update(cx, |this, cx| {
+                                    this.vault_entries = entries;
+                                    this.update_search_results();
+                                    cx.notify();
+                                })?;
+                            }
+                            anyhow::Ok(())
+                        }).detach();
+                    }
+                    
                     cx.notify();
                 } else if let Some(key_char) = &event.keystroke.key_char {
                     let is_password_mode = this.query.starts_with("pass ") && !this.vault_manager.is_unlocked();

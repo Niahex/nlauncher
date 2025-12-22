@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use keepass::{db::Node, Database, DatabaseKey};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -17,9 +16,9 @@ impl Settings {
         let config_dir = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("~/.config"))
             .join("nlauncher");
-        
+
         let config_file = config_dir.join("settings.json");
-        
+
         fs::read_to_string(config_file)
             .ok()
             .and_then(|data| serde_json::from_str(&data).ok())
@@ -27,7 +26,7 @@ impl Settings {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct VaultEntry {
     pub title: String,
     pub username: String,
@@ -38,7 +37,7 @@ pub struct VaultEntry {
 #[derive(Serialize, Deserialize)]
 struct Session {
     unlocked_at: u64,
-    password: String,
+    keepassxc_pid: Option<u32>,
 }
 
 pub struct VaultManager {
@@ -55,8 +54,10 @@ impl Clone for VaultManager {
 
 impl VaultManager {
     pub fn new() -> Self {
-        let session_file = std::env::temp_dir().join("nlauncher_vault_session");
-        Self { session_file }
+        let tmp_dir = std::env::temp_dir();
+        Self {
+            session_file: tmp_dir.join("nlauncher_keepassxc_session"),
+        }
     }
 
     fn current_timestamp() -> u64 {
@@ -73,80 +74,89 @@ impl VaultManager {
     fn load_session(&self) -> Option<Session> {
         let data = fs::read_to_string(&self.session_file).ok()?;
         let session: Session = serde_json::from_str(&data).ok()?;
-        
+
+        // Check if session is still valid and KeePassXC is running
         if Self::current_timestamp() - session.unlocked_at < SESSION_DURATION_SECS {
-            Some(session)
-        } else {
-            let _ = fs::remove_file(&self.session_file);
-            None
+            if let Some(pid) = session.keepassxc_pid {
+                if std::path::Path::new(&format!("/proc/{}", pid)).exists() {
+                    return Some(session);
+                }
+            }
         }
+
+        let _ = fs::remove_file(&self.session_file);
+        None
     }
 
-    fn save_session(&self, password: &str) -> Result<()> {
+    fn save_session(&self, pid: u32) -> Result<()> {
         let session = Session {
             unlocked_at: Self::current_timestamp(),
-            password: password.to_string(),
+            keepassxc_pid: Some(pid),
         };
         fs::write(&self.session_file, serde_json::to_string(&session)?)?;
         Ok(())
     }
 
-    pub fn unlock(&self, password: &str) -> Result<Vec<VaultEntry>> {
-        let settings = Settings::load();
-        let vault_path = settings.vault_path
-            .context("No vault configured. Open settings to set vault path.")?;
+    pub fn unlock(&self, _password: &str) -> Result<Vec<VaultEntry>> {
+        // Check if KeePassXC is running and unlocked via DBus
+        // If not, return error asking user to open KeePassXC
         
-        let db = Database::open(
-            &mut fs::File::open(&vault_path)?,
-            DatabaseKey::new().with_password(password),
-        )?;
-
-        self.save_session(password)?;
-        Ok(self.extract_entries(&db))
+        match self.load_from_session() {
+            Ok(entries) => {
+                self.save_session(0)?;
+                Ok(entries)
+            }
+            Err(e) => {
+                Err(anyhow::anyhow!(
+                    "Please open and unlock KeePassXC first. Enable 'Secret Service Integration' in KeePassXC settings. Error: {}", 
+                    e
+                ))
+            }
+        }
     }
 
     pub fn load_from_session(&self) -> Result<Vec<VaultEntry>> {
-        let session = self.load_session().context("No session")?;
-        let settings = Settings::load();
-        let vault_path = settings.vault_path
-            .context("No vault configured")?;
+        use secret_service::blocking::{SecretService, Collection};
+        use secret_service::EncryptionType;
+
+        eprintln!("[vault] Connecting to Secret Service...");
+        let ss = SecretService::connect(EncryptionType::Plain)?;
         
-        let db = Database::open(
-            &mut fs::File::open(&vault_path)?,
-            DatabaseKey::new().with_password(&session.password),
-        )?;
+        eprintln!("[vault] Getting default collection...");
+        let collection = ss.get_default_collection()?;
 
-        Ok(self.extract_entries(&db))
-    }
+        eprintln!("[vault] Checking if locked...");
+        if collection.is_locked()? {
+            return Err(anyhow::anyhow!("KeePassXC is locked"));
+        }
 
-    fn extract_entries(&self, db: &Database) -> Vec<VaultEntry> {
+        eprintln!("[vault] Getting all items...");
+        let items = collection.get_all_items()?;
+        eprintln!("[vault] Found {} items", items.len());
+        
         let mut entries = Vec::new();
-        for node in &db.root.children {
-            self.traverse_group(node, &mut entries);
-        }
-        entries
-    }
 
-    fn traverse_group(&self, node: &Node, entries: &mut Vec<VaultEntry>) {
-        match node {
-            Node::Group(g) => {
-                for child in &g.children {
-                    self.traverse_group(child, entries);
-                }
-            }
-            Node::Entry(e) => {
-                let title = e.get_title().unwrap_or("Untitled").to_string();
-                let username = e.get_username().unwrap_or("").to_string();
-                let password = e.get_password().unwrap_or("").to_string();
-                let totp = e.get("otp").map(|s| s.to_string());
+        for (i, item) in items.iter().enumerate() {
+            eprintln!("[vault] Processing item {}/{}", i + 1, items.len());
+            let label = item.get_label()?;
+            let secret = item.get_secret()?;
+            let attributes = item.get_attributes()?;
 
-                entries.push(VaultEntry {
-                    title,
-                    username,
-                    password,
-                    totp,
-                });
-            }
+            let username = attributes
+                .get("username")
+                .or_else(|| attributes.get("UserName"))
+                .cloned()
+                .unwrap_or_default();
+
+            entries.push(VaultEntry {
+                title: label,
+                username,
+                password: String::from_utf8_lossy(&secret).to_string(),
+                totp: None,
+            });
         }
+
+        eprintln!("[vault] Done! Loaded {} entries", entries.len());
+        Ok(entries)
     }
 }

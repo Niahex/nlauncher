@@ -64,6 +64,7 @@
           nerd-fonts.ubuntu-sans
           nerd-fonts.ubuntu
           noto-fonts-emoji
+          libsecret
         ];
 
         # Dependencies needed only at runtime
