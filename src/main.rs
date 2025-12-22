@@ -1,11 +1,11 @@
 use gpui::{
-    actions, div, img, layer_shell::*, point, prelude::*, px, rgb, rgba, App, Application, Bounds,
-    Context, FocusHandle, KeyBinding, KeyDownEvent, Render, SharedString, Size, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
+    actions, background_executor, div, img, layer_shell::*, point, prelude::*, px, rgb, rgba, App,
+    Application, Bounds, Context, FocusHandle, KeyBinding, KeyDownEvent, Render, SharedString,
+    Size, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
 };
-use std::process::Command;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 mod applications;
 mod calculator;
@@ -50,45 +50,49 @@ impl Launcher {
             scroll_offset: 0,
         };
 
-        // Chargement asynchrone des applications
-        cx.spawn(|view, mut cx| async move {
-            // 1. Charger le cache immédiatement (très rapide)
-            if let Some(apps) = load_from_cache() {
-                let _ = view.update(&mut cx, |this, cx| {
-                    this.applications = apps;
-                    this.update_search_results();
-                    cx.notify();
-                });
-            }
+        if let Some(apps) = load_from_cache() {
+            launcher.applications = apps;
+            launcher.update_search_results();
+        }
 
-            // 2. Scanner les applications en arrière-plan pour mettre à jour
-            let apps = scan_applications();
-            let _ = view.update(&mut cx, |this, cx| {
+        cx.spawn(async move |this, cx| {
+            let apps = background_executor()
+                .spawn(async move { scan_applications() })
+                .await;
+
+            this.update(cx, |this, cx| {
                 this.applications = apps.clone();
                 this.update_search_results();
                 cx.notify();
-            });
+            })?;
 
-            // 3. Sauvegarder le nouveau cache
-            let _ = save_to_cache(&apps);
+            background_executor()
+                .spawn(async move {
+                    let _ = save_to_cache(&apps);
+                })
+                .detach();
+
+            anyhow::Ok(())
         })
         .detach();
 
-        // Initialisation asynchrone de la calculatrice
-        cx.spawn(|view, mut cx| async move {
-            let calculator = Calculator::new();
-            let _ = view.update(&mut cx, |this, cx| {
+        cx.spawn(async move |this, cx| {
+            let calculator = background_executor()
+                .spawn(async move { Calculator::new() })
+                .await;
+
+            this.update(cx, |this, cx| {
                 this.calculator = Some(calculator);
-                // Si l'utilisateur a déjà tapé un calcul, on met à jour
                 if is_calculator_query(&this.query) {
                     this.update_search_results();
                     cx.notify();
                 }
-            });
+            })?;
+
+            anyhow::Ok(())
         })
         .detach();
 
-        launcher.update_search_results();
         launcher
     }
 
@@ -96,7 +100,6 @@ impl Launcher {
         let query_str = self.query.to_string();
         self.search_results.clear();
 
-        // Vérifier si c'est une requête de processus
         if is_process_query(&query_str) {
             let processes = get_running_processes();
             if query_str == "ps" {
@@ -111,19 +114,17 @@ impl Launcher {
                     }
                 }
             }
-        }
-        // Vérifier si c'est une requête de calcul
-        else if is_calculator_query(&query_str) {
+        } else if is_calculator_query(&query_str) {
             if let Some(calculator) = &mut self.calculator {
                 if let Some(result) = calculator.evaluate(&query_str) {
                     self.search_results.push(SearchResult::Calculation(result));
                 }
             } else {
-                self.search_results.push(SearchResult::Calculation("Initializing calculator...".to_string()));
+                self.search_results.push(SearchResult::Calculation(
+                    "Initializing calculator...".to_string(),
+                ));
             }
-        }
-        // Recherche fuzzy dans les applications
-        else {
+        } else {
             let app_indices = self.fuzzy_matcher.search(&query_str, &self.applications);
             for index in app_indices.into_iter().take(50) {
                 self.search_results.push(SearchResult::Application(index));
@@ -302,14 +303,12 @@ impl Render for Launcher {
                                     .flex()
                                     .items_center()
                                     .p_2()
-                                    .text_color(rgb(0xd8dee9))
+                                    .text_color(rgb(0xd8dee9)) // snow1
                                     .rounded_md()
                                     .hover(|style| style.bg(rgb(0x434c5e)));
 
                                 if original_index == selected_index {
-                                    item = item
-                                        .bg(rgba(0x88c0d033))
-                                        .text_color(rgb(0x88c0d0));
+                                    item = item.bg(rgba(0x88c0d033)).text_color(rgb(0x88c0d0));
                                 }
 
                                 match result {
@@ -395,8 +394,7 @@ impl Render for Launcher {
 }
 
 fn get_lock_path() -> PathBuf {
-    let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
-        .unwrap_or_else(|_| "/tmp".to_string());
+    let runtime_dir = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
     PathBuf::from(runtime_dir).join("nlauncher.lock")
 }
 
@@ -405,10 +403,10 @@ fn is_running() -> bool {
     if !lock_path.exists() {
         return false;
     }
-    
+
     if let Ok(pid_str) = fs::read_to_string(&lock_path) {
         if let Ok(pid) = pid_str.trim().parse::<i32>() {
-            return std::path::Path::new(&format!("/proc/{}", pid)).exists();
+            return std::path::Path::new(&format!("/proc/{pid}")).exists();
         }
     }
     false
@@ -436,51 +434,51 @@ fn main() {
         }
         std::process::exit(0);
     }
-    
+
     create_lock();
-    
+
     let _ = std::panic::catch_unwind(|| {
         Application::new().run(|cx: &mut App| {
-        cx.on_action(|_: &Quit, cx| cx.quit());
-        cx.bind_keys([
-            KeyBinding::new("backspace", Backspace, None),
-            KeyBinding::new("up", Up, None),
-            KeyBinding::new("down", Down, None),
-            KeyBinding::new("enter", Launch, None),
-            KeyBinding::new("escape", Quit, None),
-        ]);
+            cx.on_action(|_: &Quit, cx| cx.quit());
+            cx.bind_keys([
+                KeyBinding::new("backspace", Backspace, None),
+                KeyBinding::new("up", Up, None),
+                KeyBinding::new("down", Down, None),
+                KeyBinding::new("enter", Launch, None),
+                KeyBinding::new("escape", Quit, None),
+            ]);
 
-        let window = cx
-            .open_window(
-                WindowOptions {
-                    titlebar: None,
-                    window_bounds: Some(WindowBounds::Windowed(Bounds {
-                        origin: point(px(0.), px(0.)),
-                        size: Size::new(px(800.), px(600.)),
-                    })),
-                    app_id: Some("nlauncher".to_string()),
-                    window_background: WindowBackgroundAppearance::Transparent,
-                    kind: WindowKind::LayerShell(LayerShellOptions {
-                        namespace: "nlauncher".to_string(),
-                        anchor: Anchor::empty(),
-                        margin: Some((px(0.), px(0.), px(0.), px(0.))),
-                        keyboard_interactivity: KeyboardInteractivity::Exclusive,
+            let window = cx
+                .open_window(
+                    WindowOptions {
+                        titlebar: None,
+                        window_bounds: Some(WindowBounds::Windowed(Bounds {
+                            origin: point(px(0.), px(0.)),
+                            size: Size::new(px(800.), px(600.)),
+                        })),
+                        app_id: Some("nlauncher".to_string()),
+                        window_background: WindowBackgroundAppearance::Transparent,
+                        kind: WindowKind::LayerShell(LayerShellOptions {
+                            namespace: "nlauncher".to_string(),
+                            anchor: Anchor::empty(),
+                            margin: Some((px(0.), px(0.), px(0.), px(0.))),
+                            keyboard_interactivity: KeyboardInteractivity::Exclusive,
+                            ..Default::default()
+                        }),
                         ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-                |_, cx| cx.new(Launcher::new),
-            )
-            .unwrap();
+                    },
+                    |_, cx| cx.new(Launcher::new),
+                )
+                .unwrap();
 
-        window
-            .update(cx, |view, window, cx| {
-                window.focus(&view.focus_handle);
-                cx.activate(true);
-            })
-            .unwrap();
+            window
+                .update(cx, |view, window, cx| {
+                    window.focus(&view.focus_handle);
+                    cx.activate(true);
+                })
+                .unwrap();
         });
     });
-    
+
     remove_lock();
 }

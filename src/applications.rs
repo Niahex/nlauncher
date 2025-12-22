@@ -4,7 +4,6 @@ use freedesktop_icons::lookup;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
-use std::time::SystemTime;
 
 fn get_cache_path() -> String {
     if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
