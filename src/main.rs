@@ -1,5 +1,5 @@
 use gpui::{
-    actions, background_executor, div, img, layer_shell::*, point, prelude::*, px, rgb, rgba, App,
+    actions, background_executor, div, img, layer_shell::*, point, prelude::*, px, App,
     Application, Bounds, Context, FocusHandle, KeyBinding, KeyDownEvent, Render, SharedString,
     Size, Task, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
 };
@@ -13,6 +13,7 @@ mod clipboard;
 mod fuzzy;
 mod process;
 mod state;
+mod theme;
 mod vault;
 use applications::{load_from_cache, save_to_cache, scan_applications};
 use calculator::{is_calculator_query, Calculator};
@@ -20,6 +21,7 @@ use clipboard::{get_clipboard_history, is_clipboard_query, set_clipboard, Clipbo
 use fuzzy::FuzzyMatcher;
 use process::{get_running_processes, is_process_query, kill_process, ProcessInfo};
 use state::ApplicationInfo;
+use theme::NordTheme;
 use vault::{VaultEntry, VaultManager};
 
 actions!(launcher, [Quit, Backspace, Up, Down, Launch, CopyPassword, CopyUsername, CopyTotp, OpenSettings]);
@@ -45,6 +47,7 @@ struct Launcher {
     vault_unlocking: bool,
     vault_entries: Vec<VaultEntry>,
     search_task: Option<Task<()>>,
+    theme: NordTheme,
 }
 
 impl Launcher {
@@ -64,6 +67,7 @@ impl Launcher {
             vault_unlocking: false,
             vault_entries: Vec::new(),
             search_task: None,
+            theme: NordTheme::new(),
         };
 
         // Try to load vault from existing session in background
@@ -467,9 +471,9 @@ impl Render for Launcher {
                 div()
                     .w(px(700.))
                     .max_h(px(500.))
-                    .bg(rgba(0x2e3440dd))
+                    .bg(self.theme.bg_primary.opacity(0.87))
                     .border_1()
-                    .border_color(rgba(0x88c0d033))
+                    .border_color(self.theme.accent_primary.opacity(0.2))
                     .rounded_lg()
                     .shadow_lg()
                     .flex()
@@ -478,14 +482,14 @@ impl Render for Launcher {
                     .child(
                         div()
                             .p_2()
-                            .bg(rgb(0x3b4252))
+                            .bg(self.theme.bg_secondary)
                             .rounded_md()
                             .flex()
                             .gap_1()
                             .text_color(if query_text.is_empty() {
-                                rgba(0xd8dee966)
+                                self.theme.text_muted
                             } else {
-                                rgb(0xeceff4)
+                                self.theme.text_primary
                             })
                             .child(if query_text.is_empty() {
                                 div().child("Search for apps and commands")
@@ -504,7 +508,8 @@ impl Render for Launcher {
                                     .child(
                                         div()
                                             .px_1()
-                                            .bg(rgb(0xbf616a))
+                                            .bg(self.theme.cmd_process_bg)
+                                            .text_color(self.theme.cmd_process_text)
                                             .rounded_sm()
                                             .child(cmd)
                                     )
@@ -524,7 +529,8 @@ impl Render for Launcher {
                                     .child(
                                         div()
                                             .px_1()
-                                            .bg(rgb(0xebcb8b))
+                                            .bg(self.theme.cmd_password_bg)
+                                            .text_color(self.theme.cmd_password_text)
                                             .rounded_sm()
                                             .child(cmd)
                                     )
@@ -544,7 +550,8 @@ impl Render for Launcher {
                                     .child(
                                         div()
                                             .px_1()
-                                            .bg(rgb(0x81a1c1))
+                                            .bg(self.theme.cmd_clip_bg)
+                                            .text_color(self.theme.cmd_clip_text)
                                             .rounded_sm()
                                             .child(cmd)
                                     )
@@ -557,7 +564,8 @@ impl Render for Launcher {
                                     .child(
                                         div()
                                             .px_1()
-                                            .bg(rgb(0xa3be8c))
+                                            .bg(self.theme.cmd_calc_bg)
+                                            .text_color(self.theme.cmd_calc_text)
                                             .rounded_sm()
                                             .child("=")
                                     )
@@ -578,12 +586,12 @@ impl Render for Launcher {
                                     .flex()
                                     .items_center()
                                     .p_2()
-                                    .text_color(rgb(0xd8dee9)) // snow1
+                                    .text_color(self.theme.text_secondary) // snow1
                                     .rounded_md()
-                                    .hover(|style| style.bg(rgb(0x434c5e)));
+                                    .hover(|style| style.bg(self.theme.bg_tertiary));
 
                                 if original_index == selected_index {
-                                    item = item.bg(rgba(0x88c0d033)).text_color(rgb(0x88c0d0));
+                                    item = item.bg(self.theme.accent_primary.opacity(0.2)).text_color(self.theme.accent_primary);
                                 }
 
                                 match result {
@@ -605,7 +613,7 @@ impl Render for Launcher {
                                                         } else {
                                                             div()
                                                                 .size_6()
-                                                                .bg(rgb(0x5e81ac))
+                                                                .bg(self.theme.accent_tertiary)
                                                                 .rounded_sm()
                                                         },
                                                     )
@@ -623,7 +631,7 @@ impl Render for Launcher {
                                             .child(
                                                 div()
                                                     .size_6()
-                                                    .bg(rgb(0xa3be8c))
+                                                    .bg(self.theme.success)
                                                     .rounded_sm()
                                                     .child("="),
                                             )
@@ -637,7 +645,7 @@ impl Render for Launcher {
                                             .child(
                                                 div()
                                                     .size_6()
-                                                    .bg(rgb(0xbf616a))
+                                                    .bg(self.theme.error)
                                                     .rounded_sm()
                                                     .child("⚡"),
                                             )
@@ -652,7 +660,7 @@ impl Render for Launcher {
                                                     .child(
                                                         div()
                                                             .text_xs()
-                                                            .text_color(rgb(0x88c0d0))
+                                                            .text_color(self.theme.accent_primary)
                                                             .child(format!(
                                                                 "CPU: {:.1}% | RAM: {:.1}MB",
                                                                 process.cpu_usage,
@@ -669,7 +677,7 @@ impl Render for Launcher {
                                             .child(
                                                 div()
                                                     .size_6()
-                                                    .bg(rgb(0xebcb8b))
+                                                    .bg(self.theme.warning)
                                                     .rounded_sm()
                                                     .child("🔑"),
                                             )
@@ -681,7 +689,7 @@ impl Render for Launcher {
                                                     .child(
                                                         div()
                                                             .text_xs()
-                                                            .text_color(rgb(0x88c0d0))
+                                                            .text_color(self.theme.accent_primary)
                                                             .child(if entry.totp.is_some() {
                                                                 "Ctrl+C: password | Ctrl+B: username | Ctrl+T: TOTP"
                                                             } else {
@@ -698,7 +706,7 @@ impl Render for Launcher {
                                             .child(
                                                 div()
                                                     .size_6()
-                                                    .bg(rgb(0x81a1c1))
+                                                    .bg(self.theme.info)
                                                     .rounded_sm()
                                                     .child("📋"),
                                             )
