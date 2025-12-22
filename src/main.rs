@@ -1,7 +1,7 @@
 use gpui::{
     actions, background_executor, div, img, layer_shell::*, point, prelude::*, px, rgb, rgba, App,
     Application, Bounds, Context, FocusHandle, KeyBinding, KeyDownEvent, Render, SharedString,
-    Size, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
+    Size, Task, Window, WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -44,6 +44,7 @@ struct Launcher {
     vault_manager: VaultManager,
     vault_unlocking: bool,
     vault_entries: Vec<VaultEntry>,
+    search_task: Option<Task<()>>,
 }
 
 impl Launcher {
@@ -62,6 +63,7 @@ impl Launcher {
             vault_manager: vault_manager.clone(),
             vault_unlocking: false,
             vault_entries: Vec::new(),
+            search_task: None,
         };
 
         // Try to load vault from existing session in background
@@ -127,6 +129,9 @@ impl Launcher {
     }
 
     fn update_search_results(&mut self) {
+        // Annuler la recherche précédente si elle existe
+        self.search_task = None;
+        
         let query_str = self.query.to_string();
         self.search_results.clear();
 
