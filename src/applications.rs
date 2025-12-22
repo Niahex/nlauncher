@@ -21,7 +21,7 @@ pub fn load_from_cache() -> Option<Vec<ApplicationInfo>> {
         return None;
     }
 
-    // On accepte un cache même un peu vieux pour la vitesse initiale
+    // Accept even slightly old cache for initial speed
     let content = fs::read_to_string(cache_path).ok()?;
     serde_json::from_str(&content).ok()
 }

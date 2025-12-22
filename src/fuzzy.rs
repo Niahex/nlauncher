@@ -23,17 +23,17 @@ impl FuzzyMatcher {
             return (0..apps.len()).collect();
         }
 
-        // Réinitialiser le matcher
+        // Reset the matcher
         self.matcher.restart(false);
 
-        // Injecter les applications
+        // Inject the applications
         let injector = self.matcher.injector();
         for (i, app) in apps.iter().enumerate() {
             let name = Utf32String::from(app.name.as_str());
             let _ = injector.push(i, |cols| cols[0] = name.clone());
         }
 
-        // Parser le pattern et lancer la recherche
+        // Parse the pattern and start the search
         let _pattern = nucleo::pattern::Pattern::parse(
             query,
             nucleo::pattern::CaseMatching::Ignore,
@@ -47,10 +47,10 @@ impl FuzzyMatcher {
             false,
         );
 
-        // Attendre que le matching soit terminé
+        // Wait for matching to complete
         self.matcher.tick(10);
 
-        // Récupérer les résultats
+        // Get the results
         let snapshot = self.matcher.snapshot();
         let mut results: Vec<usize> = Vec::new();
 

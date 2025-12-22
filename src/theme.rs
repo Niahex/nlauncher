@@ -27,14 +27,14 @@ pub struct NordTheme {
     pub info: Hsla,
 
     // Command-specific colors
-    pub cmd_process_bg: Hsla,    // ps - rouge avec 25% opacité
-    pub cmd_process_text: Hsla,  // ps - rouge 100%
-    pub cmd_password_bg: Hsla,   // pass - jaune avec 25% opacité
-    pub cmd_password_text: Hsla, // pass - jaune 100%
-    pub cmd_calc_bg: Hsla,       // = - vert avec 25% opacité
-    pub cmd_calc_text: Hsla,     // = - vert 100%
-    pub cmd_clip_bg: Hsla,       // clip - bleu avec 25% opacité
-    pub cmd_clip_text: Hsla,     // clip - bleu 100%
+    pub cmd_process_bg: Hsla,      // ps - red with 25% opacity
+    pub cmd_process_text: Hsla,    // ps - red 100%
+    pub cmd_password_bg: Hsla,     // pass - yellow with 25% opacity
+    pub cmd_password_text: Hsla,   // pass - yellow 100%
+    pub cmd_calc_bg: Hsla,         // = - green with 25% opacity
+    pub cmd_calc_text: Hsla,       // = - green 100%
+    pub cmd_clip_bg: Hsla,         // clip - blue with 25% opacity
+    pub cmd_clip_text: Hsla,       // clip - blue 100%
 }
 
 impl Default for NordTheme {
@@ -64,14 +64,14 @@ impl Default for NordTheme {
             info: rgb(0x81a1c1).into(),
 
             // Command-specific
-            cmd_process_bg: rgba(0xbf616a40).into(), // rouge 25%
-            cmd_process_text: rgb(0xbf616a).into(),  // rouge 100%
-            cmd_password_bg: rgba(0xebcb8b40).into(), // jaune 25%
-            cmd_password_text: rgb(0xebcb8b).into(), // jaune 100%
-            cmd_calc_bg: rgba(0xa3be8c40).into(),    // vert 25%
-            cmd_calc_text: rgb(0xa3be8c).into(),     // vert 100%
-            cmd_clip_bg: rgba(0x81a1c140).into(),    // bleu 25%
-            cmd_clip_text: rgb(0x81a1c1).into(),     // bleu 100%
+            cmd_process_bg: rgba(0xbf616a40).into(),    // red 25%
+            cmd_process_text: rgb(0xbf616a).into(),     // red 100%
+            cmd_password_bg: rgba(0xebcb8b40).into(),   // yellow 25%
+            cmd_password_text: rgb(0xebcb8b).into(),    // yellow 100%
+            cmd_calc_bg: rgba(0xa3be8c40).into(),       // green 25%
+            cmd_calc_text: rgb(0xa3be8c).into(),        // green 100%
+            cmd_clip_bg: rgba(0x81a1c140).into(),       // blue 25%
+            cmd_clip_text: rgb(0x81a1c1).into(),        // blue 100%
         }
     }
 }

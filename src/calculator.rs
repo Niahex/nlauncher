@@ -19,7 +19,7 @@ impl Calculator {
     }
 
     pub fn evaluate(&mut self, expression: &str) -> Option<String> {
-        // Enlever le "=" du début
+        // Remove the "=" prefix
         let expr = expression.strip_prefix('=').unwrap_or(expression).trim();
 
         if expr.is_empty() {
