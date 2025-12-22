@@ -127,8 +127,8 @@ impl Launcher {
         let query_str = self.query.to_string();
         self.search_results.clear();
 
-        if query_str.starts_with("pass ") {
-            let rest = query_str.strip_prefix("pass ").unwrap_or("");
+        if query_str.starts_with("pass") && query_str.len() > 4 {
+            let rest = query_str.strip_prefix("pass").unwrap_or("");
             
             // If vault is empty but session exists, show loading message
             if self.vault_entries.is_empty() && self.vault_manager.is_unlocked() {
@@ -154,15 +154,8 @@ impl Launcher {
                     for process in processes {
                         self.search_results.push(SearchResult::Process(process));
                     }
-                } else if query_str.starts_with("ps ") {
-                    let search_term = query_str.strip_prefix("ps ").unwrap_or("").to_lowercase();
-                    for process in processes {
-                        if process.name.to_lowercase().contains(&search_term) {
-                            self.search_results.push(SearchResult::Process(process));
-                        }
-                    }
-                } else if query_str.starts_with("kill ") {
-                    let search_term = query_str.strip_prefix("kill ").unwrap_or("").to_lowercase();
+                } else if query_str.starts_with("ps") && query_str.len() > 2 {
+                    let search_term = query_str.strip_prefix("ps").unwrap_or("").to_lowercase();
                     for process in processes {
                         if process.name.to_lowercase().contains(&search_term) {
                             self.search_results.push(SearchResult::Process(process));
@@ -225,10 +218,10 @@ impl Launcher {
     fn launch(&mut self, _: &Launch, _: &mut Window, cx: &mut Context<Self>) {
         let query_str = self.query.to_string();
         
-        // Handle "pass {password}" - unlock vault on Enter
-        if query_str.starts_with("pass ") {
-            let rest = query_str.strip_prefix("pass ").unwrap_or("");
-            if !rest.contains(' ') && !rest.is_empty() && !self.vault_manager.is_unlocked() {
+        // Handle "pass{password}" - unlock vault on Enter
+        if query_str.starts_with("pass") && query_str.len() > 4 {
+            let rest = query_str.strip_prefix("pass").unwrap_or("");
+            if !rest.is_empty() && !self.vault_manager.is_unlocked() {
                 if self.vault_unlocking {
                     return; // Already unlocking
                 }
@@ -251,7 +244,7 @@ impl Launcher {
                         match result {
                             Ok(entries) => {
                                 this.vault_entries = entries;
-                                this.query = "pass ".into();
+                                this.query = "pass".into();
                                 this.update_search_results();
                                 this.selected_index = 0;
                             }
@@ -400,7 +393,7 @@ impl Render for Launcher {
                     query.push(' ');
                     
                     // Trigger vault reload if entering pass mode with active session
-                    let should_reload = query == "pass " && this.vault_entries.is_empty() && this.vault_manager.is_unlocked();
+                    let should_reload = query == "pass" && this.vault_entries.is_empty() && this.vault_manager.is_unlocked();
                     
                     this.query = query.into();
                     this.update_search_results();
@@ -425,7 +418,7 @@ impl Render for Launcher {
                     
                     cx.notify();
                 } else if let Some(key_char) = &event.keystroke.key_char {
-                    let is_password_mode = this.query.starts_with("pass ") && !this.vault_manager.is_unlocked();
+                    let is_password_mode = this.query.starts_with("pass") && this.query.len() > 4 && !this.vault_manager.is_unlocked();
                     let allowed = if is_password_mode {
                         true
                     } else {
@@ -465,18 +458,72 @@ impl Render for Launcher {
                             .p_2()
                             .bg(rgb(0x3b4252))
                             .rounded_md()
+                            .flex()
+                            .gap_1()
                             .text_color(if query_text.is_empty() {
                                 rgba(0xd8dee966)
                             } else {
                                 rgb(0xeceff4)
                             })
                             .child(if query_text.is_empty() {
-                                "Search for apps and commands".to_string()
+                                div().child("Search for apps and commands")
+                            } else if query_text.starts_with("ps") {
+                                let (cmd, rest) = if query_text.starts_with("ps") && query_text.len() > 2 {
+                                    ("ps".to_string(), query_text.strip_prefix("ps").unwrap_or("").to_string())
+                                } else if query_text == "ps" {
+                                    ("ps".to_string(), String::new())
+                                } else {
+                                    (String::new(), query_text.clone())
+                                };
+                                
+                                div()
+                                    .flex()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .px_1()
+                                            .bg(rgb(0xbf616a))
+                                            .rounded_sm()
+                                            .child(cmd)
+                                    )
+                                    .child(rest)
+                            } else if query_text.starts_with("pass") {
+                                let (cmd, rest) = if query_text.starts_with("pass") && query_text.len() > 4 {
+                                    ("pass".to_string(), query_text.strip_prefix("pass").unwrap_or("").to_string())
+                                } else if query_text == "pass" {
+                                    ("pass".to_string(), String::new())
+                                } else {
+                                    (String::new(), query_text.clone())
+                                };
+                                
+                                div()
+                                    .flex()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .px_1()
+                                            .bg(rgb(0xebcb8b))
+                                            .rounded_sm()
+                                            .child(cmd)
+                                    )
+                                    .child(rest)
+                            } else if query_text.starts_with('=') {
+                                let rest = query_text.strip_prefix('=').unwrap_or("").to_string();
+                                div()
+                                    .flex()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .px_1()
+                                            .bg(rgb(0xa3be8c))
+                                            .rounded_sm()
+                                            .child("=")
+                                    )
+                                    .child(rest)
                             } else if query_text.starts_with("pass ") {
-                                // TODO: remettre le censored
-                                query_text.clone()
+                                div().child(query_text.clone())
                             } else {
-                                query_text.clone()
+                                div().child(query_text.clone())
                             }),
                     )
                     .child(div().flex().flex_col().mt_2().children({

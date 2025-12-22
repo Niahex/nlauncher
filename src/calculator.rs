@@ -19,14 +19,16 @@ impl Calculator {
     }
 
     pub fn evaluate(&mut self, expression: &str) -> Option<String> {
-        // Vérifier si l'expression ressemble à un calcul
-        if !self.looks_like_calculation(expression) {
+        // Enlever le "=" du début
+        let expr = expression.strip_prefix('=').unwrap_or(expression).trim();
+        
+        if expr.is_empty() {
             return None;
         }
 
         match self
             .context
-            .interpret(expression, numbat::resolver::CodeSource::Text)
+            .interpret(expr, numbat::resolver::CodeSource::Text)
         {
             Ok((_, InterpreterResult::Value(value))) => Some(format!("{value}")),
             Ok((_, InterpreterResult::Continue)) => None,
@@ -51,20 +53,5 @@ impl Calculator {
 }
 
 pub fn is_calculator_query(query: &str) -> bool {
-    let trimmed = query.trim();
-    if trimmed.is_empty() {
-        return false;
-    }
-
-    // Vérifier les patterns de calcul
-    // Vérifier si c'est une expression mathématique simple
-    let has_operator = trimmed.contains('+')
-        || trimmed.contains('-')
-        || trimmed.contains('*')
-        || trimmed.contains('/')
-        || trimmed.contains('^');
-
-    let has_digit = trimmed.chars().any(|c| c.is_ascii_digit());
-
-    has_operator && has_digit
+    query.trim().starts_with('=')
 }
