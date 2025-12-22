@@ -117,6 +117,8 @@
           inherit nlauncher;
         };
 
+        homeManagerModules.default = import ./nix/home-manager.nix;
+
         checks = {
           inherit nlauncher;
 

@@ -12,18 +12,21 @@ mod calculator;
 mod fuzzy;
 mod process;
 mod state;
+mod vault;
 use applications::{load_from_cache, save_to_cache, scan_applications};
 use calculator::{is_calculator_query, Calculator};
 use fuzzy::FuzzyMatcher;
 use process::{get_running_processes, is_process_query, kill_process, ProcessInfo};
 use state::ApplicationInfo;
+use vault::{VaultEntry, VaultManager};
 
-actions!(launcher, [Quit, Backspace, Up, Down, Launch]);
+actions!(launcher, [Quit, Backspace, Up, Down, Launch, CopyPassword, CopyUsername, CopyTotp, OpenSettings]);
 
 enum SearchResult {
     Application(usize),
     Calculation(String),
     Process(ProcessInfo),
+    VaultEntry(VaultEntry),
 }
 
 struct Launcher {
@@ -35,6 +38,7 @@ struct Launcher {
     calculator: Option<Calculator>,
     search_results: Vec<SearchResult>,
     scroll_offset: usize,
+    vault_manager: VaultManager,
 }
 
 impl Launcher {
@@ -48,6 +52,7 @@ impl Launcher {
             calculator: None,
             search_results: Vec::new(),
             scroll_offset: 0,
+            vault_manager: VaultManager::new(),
         };
 
         if let Some(apps) = load_from_cache() {
@@ -100,10 +105,60 @@ impl Launcher {
         let query_str = self.query.to_string();
         self.search_results.clear();
 
-        if is_process_query(&query_str) {
+        if query_str.starts_with("pass ") {
+            let rest = query_str.strip_prefix("pass ").unwrap_or("");
+            
+            if rest.contains(' ') {
+                // "pass {password} {search}"
+                let parts: Vec<&str> = rest.splitn(2, ' ').collect();
+                let password = parts[0];
+                let search = parts.get(1).unwrap_or(&"");
+                
+                if search.is_empty() {
+                    // Unlock vault
+                    match self.vault_manager.unlock(password) {
+                        Ok(entries) => {
+                            for entry in entries {
+                                self.search_results.push(SearchResult::VaultEntry(entry));
+                            }
+                        }
+                        Err(e) => {
+                            self.search_results.push(SearchResult::Calculation(format!("Failed: {}", e)));
+                        }
+                    }
+                } else {
+                    // Unlock and search
+                    match self.vault_manager.unlock(password) {
+                        Ok(entries) => {
+                            for entry in entries {
+                                if entry.title.to_lowercase().contains(&search.to_lowercase())
+                                    || entry.username.to_lowercase().contains(&search.to_lowercase()) {
+                                    self.search_results.push(SearchResult::VaultEntry(entry));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            self.search_results.push(SearchResult::Calculation(format!("Failed: {}", e)));
+                        }
+                    }
+                }
+            } else {
+                // "pass {search}" - use session
+                match self.vault_manager.search(rest) {
+                    Ok(entries) => {
+                        for entry in entries {
+                            self.search_results.push(SearchResult::VaultEntry(entry));
+                        }
+                    }
+                    Err(e) => {
+                        self.search_results.push(SearchResult::Calculation(format!("Vault locked: {}", e)));
+                    }
+                }
+            }
+        } else if is_process_query(&query_str) {
             let processes = get_running_processes();
             if query_str == "ps" {
-                for process in processes.into_iter().take(20) {
+                for process in processes {
                     self.search_results.push(SearchResult::Process(process));
                 }
             } else if query_str.starts_with("ps ") {
@@ -216,7 +271,44 @@ impl Launcher {
                             Err(e) => eprintln!("[nlauncher] Failed to kill process {name} (pid: {pid}): {e}"),
                         }
                     });
-                    cx.quit();
+
+                    self.update_search_results();
+                    if self.selected_index >= self.search_results.len() && self.selected_index > 0 {
+                        self.selected_index = self.search_results.len().saturating_sub(1);
+                    }
+                    cx.notify();
+                }
+                SearchResult::VaultEntry(_) => {
+                    // Do nothing on Enter for vault entries
+                }
+            }
+        }
+    }
+
+    fn copy_password(&mut self, _: &CopyPassword, _: &mut Window, _cx: &mut Context<Self>) {
+        if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index) {
+            if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                let _ = clipboard.set_text(&entry.password);
+                eprintln!("[nlauncher] Copied password for: {}", entry.title);
+            }
+        }
+    }
+
+    fn copy_username(&mut self, _: &CopyUsername, _: &mut Window, _cx: &mut Context<Self>) {
+        if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index) {
+            if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                let _ = clipboard.set_text(&entry.username);
+                eprintln!("[nlauncher] Copied username for: {}", entry.title);
+            }
+        }
+    }
+
+    fn copy_totp(&mut self, _: &CopyTotp, _: &mut Window, _cx: &mut Context<Self>) {
+        if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index) {
+            if let Some(totp) = &entry.totp {
+                if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                    let _ = clipboard.set_text(totp);
+                    eprintln!("[nlauncher] Copied TOTP for: {}", entry.title);
                 }
             }
         }
@@ -246,7 +338,12 @@ impl Render for Launcher {
                     }
                     key if key.len() == 1 => {
                         if let Some(key_char) = key.chars().next() {
-                            if key_char.is_alphanumeric() || "+-*/()^.=".contains(key_char) {
+                            let is_password_mode = this.query.starts_with("pass ");
+                            let allowed = key_char.is_alphanumeric() 
+                                || "+-*/()^.=".contains(key_char)
+                                || (is_password_mode && !key_char.is_control());
+                            
+                            if allowed {
                                 let mut query = this.query.to_string();
                                 query.push(key_char);
                                 this.query = query.into();
@@ -262,6 +359,9 @@ impl Render for Launcher {
             .on_action(cx.listener(Self::up))
             .on_action(cx.listener(Self::down))
             .on_action(cx.listener(Self::launch))
+            .on_action(cx.listener(Self::copy_password))
+            .on_action(cx.listener(Self::copy_username))
+            .on_action(cx.listener(Self::copy_totp))
             .child(
                 div()
                     .w(px(700.))
@@ -286,6 +386,20 @@ impl Render for Launcher {
                             })
                             .child(if query_text.is_empty() {
                                 "Search for apps and commands".to_string()
+                            } else if query_text.starts_with("pass ") {
+                                let rest = query_text.strip_prefix("pass ").unwrap_or("");
+                                if rest.contains(' ') {
+                                    // "pass {password} {search}" - censor password
+                                    let parts: Vec<&str> = rest.splitn(2, ' ').collect();
+                                    let search = parts.get(1).unwrap_or(&"");
+                                    format!("pass {} {}", "•".repeat(parts[0].len()), search)
+                                } else if self.vault_manager.is_unlocked() {
+                                    // "pass {search}" - vault unlocked, show search
+                                    format!("pass {}", rest)
+                                } else {
+                                    // "pass {password}" - censor password
+                                    format!("pass {}", "•".repeat(rest.len()))
+                                }
                             } else {
                                 query_text.clone()
                             }),
@@ -385,6 +499,35 @@ impl Render for Launcher {
                                                     ),
                                             ),
                                     ),
+                                    SearchResult::VaultEntry(entry) => item.child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .size_6()
+                                                    .bg(rgb(0xebcb8b))
+                                                    .rounded_sm()
+                                                    .child("🔑"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .flex_col()
+                                                    .child(format!("{} ({})", entry.title, entry.username))
+                                                    .child(
+                                                        div()
+                                                            .text_xs()
+                                                            .text_color(rgb(0x88c0d0))
+                                                            .child(if entry.totp.is_some() {
+                                                                "Ctrl+C: password | Ctrl+B: username | Ctrl+T: TOTP"
+                                                            } else {
+                                                                "Ctrl+C: password | Ctrl+B: username"
+                                                            }),
+                                                    ),
+                                            ),
+                                    ),
                                 }
                             })
                     })),
@@ -445,6 +588,9 @@ fn main() {
                 KeyBinding::new("down", Down, None),
                 KeyBinding::new("enter", Launch, None),
                 KeyBinding::new("escape", Quit, None),
+                KeyBinding::new("ctrl-c", CopyPassword, None),
+                KeyBinding::new("ctrl-b", CopyUsername, None),
+                KeyBinding::new("ctrl-t", CopyTotp, None),
             ]);
 
             let window = cx
