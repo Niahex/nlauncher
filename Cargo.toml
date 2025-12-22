@@ -15,7 +15,6 @@ nucleo = "0.3.0"
 numbat = "1.10.0"
 libc = "0.2"
 keepass = "0.8"
-arboard = "3.4"
 dirs = "5.0"
 
 [workspace]

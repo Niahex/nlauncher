@@ -72,6 +72,7 @@
           vulkan-loader
           mesa
           libxkbcommon
+          wl-clipboard
         ];
 
         nativeBuildInputs = with pkgs; [

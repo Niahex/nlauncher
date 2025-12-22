@@ -40,10 +40,13 @@ struct Launcher {
     scroll_offset: usize,
     vault_manager: VaultManager,
     vault_unlocking: bool,
+    vault_entries: Vec<VaultEntry>,
 }
 
 impl Launcher {
     fn new(cx: &mut Context<Self>) -> Self {
+        let vault_manager = VaultManager::new();
+        
         let mut launcher = Self {
             focus_handle: cx.focus_handle(),
             applications: Vec::new(),
@@ -53,9 +56,26 @@ impl Launcher {
             calculator: None,
             search_results: Vec::new(),
             scroll_offset: 0,
-            vault_manager: VaultManager::new(),
+            vault_manager: vault_manager.clone(),
             vault_unlocking: false,
+            vault_entries: Vec::new(),
         };
+
+        // Try to load vault from existing session in background
+        if vault_manager.is_unlocked() {
+            cx.spawn(async move |this, cx| {
+                let result = background_executor().spawn(async move {
+                    vault_manager.load_from_session()
+                }).await;
+                
+                if let Ok(entries) = result {
+                    this.update(cx, |this, _cx| {
+                        this.vault_entries = entries;
+                    })?;
+                }
+                anyhow::Ok(())
+            }).detach();
+        }
 
         if let Some(apps) = load_from_cache() {
             launcher.applications = apps;
@@ -110,88 +130,57 @@ impl Launcher {
         if query_str.starts_with("pass ") {
             let rest = query_str.strip_prefix("pass ").unwrap_or("");
             
-            if rest.contains(' ') {
-                // "pass {password} {search}"
-                let parts: Vec<&str> = rest.splitn(2, ' ').collect();
-                let password = parts[0];
-                let search = parts.get(1).unwrap_or(&"");
-                
-                if search.is_empty() {
-                    // Unlock vault
-                    match self.vault_manager.unlock(password) {
-                        Ok(entries) => {
-                            for entry in entries {
-                                self.search_results.push(SearchResult::VaultEntry(entry));
-                            }
-                        }
-                        Err(e) => {
-                            self.search_results.push(SearchResult::Calculation(format!("Failed: {}", e)));
-                        }
-                    }
-                } else {
-                    // Unlock and search
-                    match self.vault_manager.unlock(password) {
-                        Ok(entries) => {
-                            for entry in entries {
-                                if entry.title.to_lowercase().contains(&search.to_lowercase())
-                                    || entry.username.to_lowercase().contains(&search.to_lowercase()) {
-                                    self.search_results.push(SearchResult::VaultEntry(entry));
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            self.search_results.push(SearchResult::Calculation(format!("Failed: {}", e)));
-                        }
+            // Filter cached entries (only in memory during session)
+            if !self.vault_entries.is_empty() {
+                let search_lower = rest.to_lowercase();
+                for entry in &self.vault_entries {
+                    if search_lower.is_empty() 
+                        || entry.title.to_lowercase().contains(&search_lower)
+                        || entry.username.to_lowercase().contains(&search_lower) {
+                        self.search_results.push(SearchResult::VaultEntry(entry.clone()));
                     }
                 }
-            } else {
-                // "pass {search}" - use session
-                match self.vault_manager.search(rest) {
-                    Ok(entries) => {
-                        for entry in entries {
-                            self.search_results.push(SearchResult::VaultEntry(entry));
-                        }
-                    }
-                    Err(e) => {
-                        self.search_results.push(SearchResult::Calculation(format!("Vault locked: {}", e)));
-                    }
-                }
-            }
-        } else if is_process_query(&query_str) {
-            let processes = get_running_processes();
-            if query_str == "ps" {
-                for process in processes {
-                    self.search_results.push(SearchResult::Process(process));
-                }
-            } else if query_str.starts_with("ps ") {
-                let search_term = query_str.strip_prefix("ps ").unwrap_or("").to_lowercase();
-                for process in processes {
-                    if process.name.to_lowercase().contains(&search_term) {
-                        self.search_results.push(SearchResult::Process(process));
-                    }
-                }
-            } else if query_str.starts_with("kill ") {
-                let search_term = query_str.strip_prefix("kill ").unwrap_or("").to_lowercase();
-                for process in processes {
-                    if process.name.to_lowercase().contains(&search_term) {
-                        self.search_results.push(SearchResult::Process(process));
-                    }
-                }
-            }
-        } else if is_calculator_query(&query_str) {
-            if let Some(calculator) = &mut self.calculator {
-                if let Some(result) = calculator.evaluate(&query_str) {
-                    self.search_results.push(SearchResult::Calculation(result));
-                }
-            } else {
-                self.search_results.push(SearchResult::Calculation(
-                    "Initializing calculator...".to_string(),
-                ));
             }
         } else {
-            let app_indices = self.fuzzy_matcher.search(&query_str, &self.applications);
-            for index in app_indices.into_iter().take(50) {
-                self.search_results.push(SearchResult::Application(index));
+            // Clear vault entries when leaving vault mode
+            self.vault_entries.clear();
+            
+            if is_process_query(&query_str) {
+                let processes = get_running_processes();
+                if query_str == "ps" {
+                    for process in processes {
+                        self.search_results.push(SearchResult::Process(process));
+                    }
+                } else if query_str.starts_with("ps ") {
+                    let search_term = query_str.strip_prefix("ps ").unwrap_or("").to_lowercase();
+                    for process in processes {
+                        if process.name.to_lowercase().contains(&search_term) {
+                            self.search_results.push(SearchResult::Process(process));
+                        }
+                    }
+                } else if query_str.starts_with("kill ") {
+                    let search_term = query_str.strip_prefix("kill ").unwrap_or("").to_lowercase();
+                    for process in processes {
+                        if process.name.to_lowercase().contains(&search_term) {
+                            self.search_results.push(SearchResult::Process(process));
+                        }
+                    }
+                }
+            } else if is_calculator_query(&query_str) {
+                if let Some(calculator) = &mut self.calculator {
+                    if let Some(result) = calculator.evaluate(&query_str) {
+                        self.search_results.push(SearchResult::Calculation(result));
+                    }
+                } else {
+                    self.search_results.push(SearchResult::Calculation(
+                        "Initializing calculator...".to_string(),
+                    ));
+                }
+            } else {
+                let app_indices = self.fuzzy_matcher.search(&query_str, &self.applications);
+                for index in app_indices.into_iter().take(50) {
+                    self.search_results.push(SearchResult::Application(index));
+                }
             }
         }
 
@@ -258,11 +247,9 @@ impl Launcher {
                         this.vault_unlocking = false;
                         match result {
                             Ok(entries) => {
+                                this.vault_entries = entries;
                                 this.query = "pass ".into();
-                                this.search_results.clear();
-                                for entry in entries {
-                                    this.search_results.push(SearchResult::VaultEntry(entry));
-                                }
+                                this.update_search_results();
                                 this.selected_index = 0;
                             }
                             Err(e) => {
@@ -335,31 +322,58 @@ impl Launcher {
         }
     }
 
-    fn copy_password(&mut self, _: &CopyPassword, _: &mut Window, _cx: &mut Context<Self>) {
+    fn copy_password(&mut self, _: &CopyPassword, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index) {
-            if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                let _ = clipboard.set_text(&entry.password);
-                eprintln!("[nlauncher] Copied password for: {}", entry.title);
+            let password = entry.password.clone();
+            let title = entry.title.clone();
+            
+            eprintln!("[nlauncher] Copying password for: {}", title);
+            
+            let result = std::process::Command::new("wl-copy")
+                .arg(&password)
+                .spawn();
+            
+            match result {
+                Ok(_) => eprintln!("[nlauncher] wl-copy spawned successfully"),
+                Err(e) => eprintln!("[nlauncher] Failed to spawn wl-copy: {}", e),
             }
+            
+            // Wait a bit before quitting
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            cx.quit();
         }
     }
 
-    fn copy_username(&mut self, _: &CopyUsername, _: &mut Window, _cx: &mut Context<Self>) {
+    fn copy_username(&mut self, _: &CopyUsername, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index) {
-            if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                let _ = clipboard.set_text(&entry.username);
-                eprintln!("[nlauncher] Copied username for: {}", entry.title);
-            }
+            let username = entry.username.clone();
+            let title = entry.title.clone();
+            
+            eprintln!("[nlauncher] Copying username for: {}", title);
+            
+            let _ = std::process::Command::new("wl-copy")
+                .arg(&username)
+                .spawn();
+            
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            cx.quit();
         }
     }
 
-    fn copy_totp(&mut self, _: &CopyTotp, _: &mut Window, _cx: &mut Context<Self>) {
+    fn copy_totp(&mut self, _: &CopyTotp, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index) {
             if let Some(totp) = &entry.totp {
-                if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                    let _ = clipboard.set_text(totp);
-                    eprintln!("[nlauncher] Copied TOTP for: {}", entry.title);
-                }
+                let totp = totp.clone();
+                let title = entry.title.clone();
+                
+                eprintln!("[nlauncher] Copying TOTP for: {}", title);
+                
+                let _ = std::process::Command::new("wl-copy")
+                    .arg(&totp)
+                    .spawn();
+                
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                cx.quit();
             }
         }
     }

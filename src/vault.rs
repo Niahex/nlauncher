@@ -105,25 +105,18 @@ impl VaultManager {
         Ok(self.extract_entries(&db))
     }
 
-    pub fn search(&self, query: &str) -> Result<Vec<VaultEntry>> {
-        let session = self.load_session().context("Vault locked")?;
+    pub fn load_from_session(&self) -> Result<Vec<VaultEntry>> {
+        let session = self.load_session().context("No session")?;
         let settings = Settings::load();
         let vault_path = settings.vault_path
-            .context("No vault configured. Open settings to set vault path.")?;
+            .context("No vault configured")?;
         
         let db = Database::open(
             &mut fs::File::open(&vault_path)?,
             DatabaseKey::new().with_password(&session.password),
         )?;
 
-        let entries = self.extract_entries(&db);
-        Ok(entries
-            .into_iter()
-            .filter(|e| {
-                e.title.to_lowercase().contains(&query.to_lowercase())
-                    || e.username.to_lowercase().contains(&query.to_lowercase())
-            })
-            .collect())
+        Ok(self.extract_entries(&db))
     }
 
     fn extract_entries(&self, db: &Database) -> Vec<VaultEntry> {
