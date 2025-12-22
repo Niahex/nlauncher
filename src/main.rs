@@ -24,7 +24,20 @@ use state::ApplicationInfo;
 use theme::NordTheme;
 use vault::{VaultEntry, VaultManager};
 
-actions!(launcher, [Quit, Backspace, Up, Down, Launch, CopyPassword, CopyUsername, CopyTotp, OpenSettings]);
+actions!(
+    launcher,
+    [
+        Quit,
+        Backspace,
+        Up,
+        Down,
+        Launch,
+        CopyPassword,
+        CopyUsername,
+        CopyTotp,
+        OpenSettings
+    ]
+);
 
 enum SearchResult {
     Application(usize),
@@ -53,7 +66,7 @@ struct Launcher {
 impl Launcher {
     fn new(cx: &mut Context<Self>) -> Self {
         let vault_manager = VaultManager::new();
-        
+
         let mut launcher = Self {
             focus_handle: cx.focus_handle(),
             applications: Vec::new(),
@@ -73,17 +86,18 @@ impl Launcher {
         // Try to load vault from existing session in background
         if vault_manager.is_unlocked() {
             cx.spawn(async move |this, cx| {
-                let result = background_executor().spawn(async move {
-                    vault_manager.load_from_session()
-                }).await;
-                
+                let result = background_executor()
+                    .spawn(async move { vault_manager.load_from_session() })
+                    .await;
+
                 if let Ok(entries) = result {
                     this.update(cx, |this, _cx| {
                         this.vault_entries = entries;
                     })?;
                 }
                 anyhow::Ok(())
-            }).detach();
+            })
+            .detach();
         }
 
         if let Some(apps) = load_from_cache() {
@@ -135,35 +149,39 @@ impl Launcher {
     fn update_search_results(&mut self) {
         // Annuler la recherche précédente si elle existe
         self.search_task = None;
-        
+
         let query_str = self.query.to_string();
         self.search_results.clear();
 
         if query_str.starts_with("pass") && query_str.len() > 4 {
             let rest = query_str.strip_prefix("pass").unwrap_or("");
-            
+
             // If vault is empty but session exists, show loading message
             if self.vault_entries.is_empty() && self.vault_manager.is_unlocked() {
-                self.search_results.push(SearchResult::Calculation("Loading vault...".to_string()));
+                self.search_results
+                    .push(SearchResult::Calculation("Loading vault...".to_string()));
             } else if !self.vault_entries.is_empty() {
                 // Filter cached entries
                 let search_lower = rest.to_lowercase();
                 for entry in &self.vault_entries {
-                    if search_lower.is_empty() 
+                    if search_lower.is_empty()
                         || entry.title.to_lowercase().contains(&search_lower)
-                        || entry.username.to_lowercase().contains(&search_lower) {
-                        self.search_results.push(SearchResult::VaultEntry(entry.clone()));
+                        || entry.username.to_lowercase().contains(&search_lower)
+                    {
+                        self.search_results
+                            .push(SearchResult::VaultEntry(entry.clone()));
                     }
                 }
             }
         } else {
             // Clear vault entries when leaving vault mode
             self.vault_entries.clear();
-            
+
             if is_clipboard_query(&query_str) {
                 let clipboard_entries = get_clipboard_history();
                 for entry in clipboard_entries {
-                    self.search_results.push(SearchResult::ClipboardEntry(entry));
+                    self.search_results
+                        .push(SearchResult::ClipboardEntry(entry));
                 }
             } else if is_process_query(&query_str) {
                 let processes = get_running_processes();
@@ -234,7 +252,7 @@ impl Launcher {
 
     fn launch(&mut self, _: &Launch, _: &mut Window, cx: &mut Context<Self>) {
         let query_str = self.query.to_string();
-        
+
         // Handle "pass{password}" - unlock vault on Enter
         if query_str.starts_with("pass") && query_str.len() > 4 {
             let rest = query_str.strip_prefix("pass").unwrap_or("");
@@ -242,20 +260,21 @@ impl Launcher {
                 if self.vault_unlocking {
                     return; // Already unlocking
                 }
-                
+
                 self.vault_unlocking = true;
                 self.search_results.clear();
-                self.search_results.push(SearchResult::Calculation("Unlocking vault...".to_string()));
+                self.search_results
+                    .push(SearchResult::Calculation("Unlocking vault...".to_string()));
                 cx.notify();
-                
+
                 let password = rest.to_string();
                 let vault_manager = self.vault_manager.clone();
-                
+
                 cx.spawn(async move |this, cx| {
-                    let result = background_executor().spawn(async move {
-                        vault_manager.unlock(&password)
-                    }).await;
-                    
+                    let result = background_executor()
+                        .spawn(async move { vault_manager.unlock(&password) })
+                        .await;
+
                     this.update(cx, |this, cx| {
                         this.vault_unlocking = false;
                         match result {
@@ -267,18 +286,19 @@ impl Launcher {
                             }
                             Err(e) => {
                                 this.search_results.clear();
-                                this.search_results.push(SearchResult::Calculation(
-                                    format!("❌ Wrong password or vault error: {e}")
-                                ));
+                                this.search_results.push(SearchResult::Calculation(format!(
+                                    "❌ Wrong password or vault error: {e}"
+                                )));
                             }
                         }
                         cx.notify();
                     })
-                }).detach();
+                })
+                .detach();
                 return;
             }
         }
-        
+
         if let Some(result) = self.search_results.get(self.selected_index) {
             match result {
                 SearchResult::Application(app_index) => {
@@ -296,7 +316,9 @@ impl Launcher {
 
                             match cmd.spawn() {
                                 Ok(_) => eprintln!("[nlauncher] Launched: {name}"),
-                                Err(err) => eprintln!("[nlauncher] Failed to launch {name} (exec: {exec}): {err}"),
+                                Err(err) => eprintln!(
+                                    "[nlauncher] Failed to launch {name} (exec: {exec}): {err}"
+                                ),
                             }
                         });
 
@@ -315,10 +337,10 @@ impl Launcher {
                 SearchResult::Process(process) => {
                     let pid = process.pid;
                     let name = process.name.clone();
-                    std::thread::spawn(move || {
-                        match kill_process(pid) {
-                            Ok(_) => eprintln!("[nlauncher] Killed process: {name} (pid: {pid})"),
-                            Err(e) => eprintln!("[nlauncher] Failed to kill process {name} (pid: {pid}): {e}"),
+                    std::thread::spawn(move || match kill_process(pid) {
+                        Ok(_) => eprintln!("[nlauncher] Killed process: {name} (pid: {pid})"),
+                        Err(e) => {
+                            eprintln!("[nlauncher] Failed to kill process {name} (pid: {pid}): {e}")
                         }
                     });
 
@@ -345,21 +367,20 @@ impl Launcher {
     }
 
     fn copy_password(&mut self, _: &CopyPassword, _: &mut Window, cx: &mut Context<Self>) {
-        if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index) {
+        if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index)
+        {
             let password = entry.password.clone();
             let title = entry.title.clone();
-            
+
             eprintln!("[nlauncher] Copying password for: {title}");
-            
-            let result = std::process::Command::new("wl-copy")
-                .arg(&password)
-                .spawn();
-            
+
+            let result = std::process::Command::new("wl-copy").arg(&password).spawn();
+
             match result {
                 Ok(_) => eprintln!("[nlauncher] wl-copy spawned successfully"),
                 Err(e) => eprintln!("[nlauncher] Failed to spawn wl-copy: {e}"),
             }
-            
+
             // Wait a bit before quitting
             std::thread::sleep(std::time::Duration::from_millis(100));
             cx.quit();
@@ -367,33 +388,31 @@ impl Launcher {
     }
 
     fn copy_username(&mut self, _: &CopyUsername, _: &mut Window, cx: &mut Context<Self>) {
-        if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index) {
+        if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index)
+        {
             let username = entry.username.clone();
             let title = entry.title.clone();
-            
+
             eprintln!("[nlauncher] Copying username for: {title}");
-            
-            let _ = std::process::Command::new("wl-copy")
-                .arg(&username)
-                .spawn();
-            
+
+            let _ = std::process::Command::new("wl-copy").arg(&username).spawn();
+
             std::thread::sleep(std::time::Duration::from_millis(100));
             cx.quit();
         }
     }
 
     fn copy_totp(&mut self, _: &CopyTotp, _: &mut Window, cx: &mut Context<Self>) {
-        if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index) {
+        if let Some(SearchResult::VaultEntry(entry)) = self.search_results.get(self.selected_index)
+        {
             if let Some(totp) = &entry.totp {
                 let totp = totp.clone();
                 let title = entry.title.clone();
-                
+
                 eprintln!("[nlauncher] Copying TOTP for: {title}");
-                
-                let _ = std::process::Command::new("wl-copy")
-                    .arg(&totp)
-                    .spawn();
-                
+
+                let _ = std::process::Command::new("wl-copy").arg(&totp).spawn();
+
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 cx.quit();
             }
@@ -416,28 +435,28 @@ impl Render for Launcher {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
                 if event.keystroke.key == "space" {
                     let query = this.query.to_string();
-                    
+
                     // Bloquer l'espace en mode ps
                     if query.starts_with("ps") {
                         return;
                     }
-                    
+
                     let mut query = query;
                     query.push(' ');
-                    
+
                     // Trigger vault reload if entering pass mode with active session
                     let should_reload = query == "pass" && this.vault_entries.is_empty() && this.vault_manager.is_unlocked();
-                    
+
                     this.query = query.into();
                     this.update_search_results();
-                    
+
                     if should_reload {
                         let vault_manager = this.vault_manager.clone();
                         cx.spawn(async move |this, cx| {
                             let result = background_executor().spawn(async move {
                                 vault_manager.load_from_session()
                             }).await;
-                            
+
                             if let Ok(entries) = result {
                                 this.update(cx, |this, cx| {
                                     this.vault_entries = entries;
@@ -448,7 +467,7 @@ impl Render for Launcher {
                             anyhow::Ok(())
                         }).detach();
                     }
-                    
+
                     cx.notify();
                 } else if let Some(key_char) = &event.keystroke.key_char {
                     let is_password_mode = this.query.starts_with("pass") && this.query.len() > 4 && !this.vault_manager.is_unlocked();
@@ -457,7 +476,7 @@ impl Render for Launcher {
                     } else {
                         key_char.chars().all(|c| c.is_alphanumeric() || "+-*/()^.=".contains(c))
                     };
-                    
+
                     if allowed {
                         let mut query = this.query.to_string();
                         query.push_str(key_char);
@@ -508,7 +527,7 @@ impl Render for Launcher {
                                 } else {
                                     (String::new(), query_text.clone())
                                 };
-                                
+
                                 div()
                                     .flex()
                                     .gap_1()
@@ -529,7 +548,7 @@ impl Render for Launcher {
                                 } else {
                                     (String::new(), query_text.clone())
                                 };
-                                
+
                                 div()
                                     .flex()
                                     .gap_1()
@@ -550,7 +569,7 @@ impl Render for Launcher {
                                 } else {
                                     (String::new(), query_text.clone())
                                 };
-                                
+
                                 div()
                                     .flex()
                                     .gap_1()

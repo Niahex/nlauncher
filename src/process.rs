@@ -48,10 +48,7 @@ fn parse_ps_line(line: &str) -> Option<ProcessInfo> {
 }
 
 pub fn kill_process(pid: u32) -> Result<(), String> {
-    let output = Command::new("kill")
-        .arg("-9")
-        .arg(pid.to_string())
-        .output();
+    let output = Command::new("kill").arg("-9").arg(pid.to_string()).output();
 
     match output {
         Ok(output) => {

@@ -10,7 +10,9 @@ const MAX_HISTORY: usize = 100;
 fn get_history_path() -> PathBuf {
     let cache_dir = std::env::var("XDG_CACHE_HOME")
         .unwrap_or_else(|_| format!("{}/.cache", std::env::var("HOME").unwrap()));
-    PathBuf::from(cache_dir).join("nlauncher").join("clipboard_history.txt")
+    PathBuf::from(cache_dir)
+        .join("nlauncher")
+        .join("clipboard_history.txt")
 }
 
 fn get_current_clipboard() -> Option<String> {
@@ -36,7 +38,7 @@ fn save_history(history: &[String]) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
-    
+
     if let Ok(mut file) = OpenOptions::new()
         .write(true)
         .create(true)
@@ -51,31 +53,31 @@ fn save_history(history: &[String]) {
 
 fn main() {
     eprintln!("[clipboard-daemon] Starting clipboard monitor...");
-    
+
     let mut last_content = String::new();
     let mut history = load_history();
-    
+
     loop {
         if let Some(content) = get_current_clipboard() {
             if content != last_content && !content.is_empty() {
                 eprintln!("[clipboard-daemon] New clipboard content detected");
-                
+
                 // Remove if already exists
                 history.retain(|s| s != &content);
-                
+
                 // Add to front
                 history.insert(0, content.clone());
-                
+
                 // Keep only MAX_HISTORY items
                 if history.len() > MAX_HISTORY {
                     history.truncate(MAX_HISTORY);
                 }
-                
+
                 save_history(&history);
                 last_content = content;
             }
         }
-        
+
         thread::sleep(Duration::from_millis(500));
     }
 }

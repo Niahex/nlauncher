@@ -10,7 +10,9 @@ pub struct ClipboardEntry {
 fn get_history_path() -> PathBuf {
     let cache_dir = std::env::var("XDG_CACHE_HOME")
         .unwrap_or_else(|_| format!("{}/.cache", std::env::var("HOME").unwrap()));
-    PathBuf::from(cache_dir).join("nlauncher").join("clipboard_history.txt")
+    PathBuf::from(cache_dir)
+        .join("nlauncher")
+        .join("clipboard_history.txt")
 }
 
 pub fn get_clipboard_history() -> Vec<ClipboardEntry> {
@@ -28,9 +30,7 @@ pub fn get_clipboard_history() -> Vec<ClipboardEntry> {
 }
 
 pub fn set_clipboard(content: &str) -> Result<(), std::io::Error> {
-    Command::new("wl-copy")
-        .arg(content)
-        .spawn()?;
+    Command::new("wl-copy").arg(content).spawn()?;
     Ok(())
 }
 

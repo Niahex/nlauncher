@@ -87,7 +87,7 @@ impl VaultManager {
     pub fn unlock(&self, _password: &str) -> Result<Vec<VaultEntry>> {
         // Check if KeePassXC is running and unlocked via DBus
         // If not, return error asking user to open KeePassXC
-        
+
         match self.load_from_session() {
             Ok(entries) => {
                 self.save_session(0)?;
@@ -107,7 +107,7 @@ impl VaultManager {
 
         eprintln!("[vault] Connecting to Secret Service...");
         let ss = SecretService::connect(EncryptionType::Plain)?;
-        
+
         eprintln!("[vault] Getting default collection...");
         let collection = ss.get_default_collection()?;
 
@@ -119,7 +119,7 @@ impl VaultManager {
         eprintln!("[vault] Getting all items...");
         let items = collection.get_all_items()?;
         eprintln!("[vault] Found {} items", items.len());
-        
+
         let mut entries = Vec::new();
 
         for (i, item) in items.iter().enumerate() {
