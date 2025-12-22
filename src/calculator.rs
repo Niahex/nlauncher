@@ -35,21 +35,6 @@ impl Calculator {
             Err(_) => None,
         }
     }
-
-    fn looks_like_calculation(&self, input: &str) -> bool {
-        // Vérifier si l'input contient des caractères mathématiques
-        let math_chars = ['+', '-', '*', '/', '(', ')', '^', '='];
-        let has_math = input.chars().any(|c| math_chars.contains(&c));
-
-        // Ou si c'est un nombre
-        let is_number = input.trim().parse::<f64>().is_ok();
-
-        // Ou si ça contient des unités communes
-        let common_units = ["km", "m", "cm", "kg", "g", "°C", "°F", "USD", "EUR"];
-        let has_units = common_units.iter().any(|unit| input.contains(unit));
-
-        has_math || is_number || has_units
-    }
 }
 
 pub fn is_calculator_query(query: &str) -> bool {

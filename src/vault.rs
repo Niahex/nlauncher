@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -11,20 +11,7 @@ struct Settings {
     vault_path: Option<String>,
 }
 
-impl Settings {
-    fn load() -> Self {
-        let config_dir = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("~/.config"))
-            .join("nlauncher");
-
-        let config_file = config_dir.join("settings.json");
-
-        fs::read_to_string(config_file)
-            .ok()
-            .and_then(|data| serde_json::from_str(&data).ok())
-            .unwrap_or_default()
-    }
-}
+impl Settings {}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct VaultEntry {
@@ -78,7 +65,7 @@ impl VaultManager {
         // Check if session is still valid and KeePassXC is running
         if Self::current_timestamp() - session.unlocked_at < SESSION_DURATION_SECS {
             if let Some(pid) = session.keepassxc_pid {
-                if std::path::Path::new(&format!("/proc/{}", pid)).exists() {
+                if std::path::Path::new(&format!("/proc/{pid}")).exists() {
                     return Some(session);
                 }
             }
@@ -108,15 +95,14 @@ impl VaultManager {
             }
             Err(e) => {
                 Err(anyhow::anyhow!(
-                    "Please open and unlock KeePassXC first. Enable 'Secret Service Integration' in KeePassXC settings. Error: {}", 
-                    e
+                    "Please open and unlock KeePassXC first. Enable 'Secret Service Integration' in KeePassXC settings. Error: {e}"
                 ))
             }
         }
     }
 
     pub fn load_from_session(&self) -> Result<Vec<VaultEntry>> {
-        use secret_service::blocking::{SecretService, Collection};
+        use secret_service::blocking::SecretService;
         use secret_service::EncryptionType;
 
         eprintln!("[vault] Connecting to Secret Service...");

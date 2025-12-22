@@ -9,12 +9,14 @@ use std::process::Command;
 
 mod applications;
 mod calculator;
+mod clipboard;
 mod fuzzy;
 mod process;
 mod state;
 mod vault;
 use applications::{load_from_cache, save_to_cache, scan_applications};
 use calculator::{is_calculator_query, Calculator};
+use clipboard::{get_clipboard_history, is_clipboard_query, set_clipboard, ClipboardEntry};
 use fuzzy::FuzzyMatcher;
 use process::{get_running_processes, is_process_query, kill_process, ProcessInfo};
 use state::ApplicationInfo;
@@ -27,6 +29,7 @@ enum SearchResult {
     Calculation(String),
     Process(ProcessInfo),
     VaultEntry(VaultEntry),
+    ClipboardEntry(ClipboardEntry),
 }
 
 struct Launcher {
@@ -148,7 +151,12 @@ impl Launcher {
             // Clear vault entries when leaving vault mode
             self.vault_entries.clear();
             
-            if is_process_query(&query_str) {
+            if is_clipboard_query(&query_str) {
+                let clipboard_entries = get_clipboard_history();
+                for entry in clipboard_entries {
+                    self.search_results.push(SearchResult::ClipboardEntry(entry));
+                }
+            } else if is_process_query(&query_str) {
                 let processes = get_running_processes();
                 if query_str == "ps" {
                     for process in processes {
@@ -251,7 +259,7 @@ impl Launcher {
                             Err(e) => {
                                 this.search_results.clear();
                                 this.search_results.push(SearchResult::Calculation(
-                                    format!("❌ Wrong password or vault error: {}", e)
+                                    format!("❌ Wrong password or vault error: {e}")
                                 ));
                             }
                         }
@@ -314,6 +322,15 @@ impl Launcher {
                 SearchResult::VaultEntry(_) => {
                     // Do nothing on Enter for vault entries
                 }
+                SearchResult::ClipboardEntry(entry) => {
+                    let content = entry.content.clone();
+                    if let Err(e) = set_clipboard(&content) {
+                        eprintln!("[nlauncher] Failed to copy to clipboard: {e}");
+                    } else {
+                        eprintln!("[nlauncher] Copied to clipboard");
+                    }
+                    cx.quit();
+                }
             }
         }
     }
@@ -323,7 +340,7 @@ impl Launcher {
             let password = entry.password.clone();
             let title = entry.title.clone();
             
-            eprintln!("[nlauncher] Copying password for: {}", title);
+            eprintln!("[nlauncher] Copying password for: {title}");
             
             let result = std::process::Command::new("wl-copy")
                 .arg(&password)
@@ -331,7 +348,7 @@ impl Launcher {
             
             match result {
                 Ok(_) => eprintln!("[nlauncher] wl-copy spawned successfully"),
-                Err(e) => eprintln!("[nlauncher] Failed to spawn wl-copy: {}", e),
+                Err(e) => eprintln!("[nlauncher] Failed to spawn wl-copy: {e}"),
             }
             
             // Wait a bit before quitting
@@ -345,7 +362,7 @@ impl Launcher {
             let username = entry.username.clone();
             let title = entry.title.clone();
             
-            eprintln!("[nlauncher] Copying username for: {}", title);
+            eprintln!("[nlauncher] Copying username for: {title}");
             
             let _ = std::process::Command::new("wl-copy")
                 .arg(&username)
@@ -362,7 +379,7 @@ impl Launcher {
                 let totp = totp.clone();
                 let title = entry.title.clone();
                 
-                eprintln!("[nlauncher] Copying TOTP for: {}", title);
+                eprintln!("[nlauncher] Copying TOTP for: {title}");
                 
                 let _ = std::process::Command::new("wl-copy")
                     .arg(&totp)
@@ -507,6 +524,26 @@ impl Render for Launcher {
                                             .child(cmd)
                                     )
                                     .child(rest)
+                            } else if query_text.starts_with("clip") {
+                                let (cmd, rest) = if query_text.starts_with("clip") && query_text.len() > 4 {
+                                    ("clip".to_string(), query_text.strip_prefix("clip").unwrap_or("").to_string())
+                                } else if query_text == "clip" {
+                                    ("clip".to_string(), String::new())
+                                } else {
+                                    (String::new(), query_text.clone())
+                                };
+                                
+                                div()
+                                    .flex()
+                                    .gap_1()
+                                    .child(
+                                        div()
+                                            .px_1()
+                                            .bg(rgb(0x81a1c1))
+                                            .rounded_sm()
+                                            .child(cmd)
+                                    )
+                                    .child(rest)
                             } else if query_text.starts_with('=') {
                                 let rest = query_text.strip_prefix('=').unwrap_or("").to_string();
                                 div()
@@ -520,8 +557,6 @@ impl Render for Launcher {
                                             .child("=")
                                     )
                                     .child(rest)
-                            } else if query_text.starts_with("pass ") {
-                                div().child(query_text.clone())
                             } else {
                                 div().child(query_text.clone())
                             }),
@@ -648,6 +683,29 @@ impl Render for Launcher {
                                                                 "Ctrl+C: password | Ctrl+B: username"
                                                             }),
                                                     ),
+                                            ),
+                                    ),
+                                    SearchResult::ClipboardEntry(entry) => item.child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap_2()
+                                            .child(
+                                                div()
+                                                    .size_6()
+                                                    .bg(rgb(0x81a1c1))
+                                                    .rounded_sm()
+                                                    .child("📋"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .flex_col()
+                                                    .child(if entry.content.len() > 60 {
+                                                        format!("{}...", &entry.content[..60])
+                                                    } else {
+                                                        entry.content.clone()
+                                                    }),
                                             ),
                                     ),
                                 }

@@ -16,6 +16,14 @@ in
       description = "The nlauncher package to use";
     };
 
+    clipboardDaemon = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Enable clipboard history daemon";
+      };
+    };
+
     settings = {
       vaultPath = mkOption {
         type = types.nullOr types.str;
@@ -32,6 +40,24 @@ in
     xdg.configFile."nlauncher/settings.json" = mkIf (cfg.settings.vaultPath != null) {
       source = settingsFormat.generate "nlauncher-settings" {
         vault_path = cfg.settings.vaultPath;
+      };
+    };
+
+    systemd.user.services.clipboard-daemon = mkIf cfg.clipboardDaemon.enable {
+      Unit = {
+        Description = "Clipboard history daemon for nlauncher";
+        After = [ "graphical-session.target" ];
+      };
+
+      Service = {
+        Type = "simple";
+        ExecStart = "${cfg.package}/bin/clipboard-daemon";
+        Restart = "on-failure";
+        RestartSec = 5;
+      };
+
+      Install = {
+        WantedBy = [ "default.target" ];
       };
     };
   };
