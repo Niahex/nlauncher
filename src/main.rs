@@ -172,30 +172,19 @@ impl Launcher {
                 SearchResult::Application(app_index) => {
                     if let Some(app) = self.applications.get(*app_index) {
                         let exec = app.exec.clone();
+                        let name = app.name.clone();
 
                         std::thread::spawn(move || {
                             let mut cmd = Command::new("sh");
                             cmd.arg("-c")
                                 .arg(&exec)
-                                .env_clear()
-                                .env("PATH", std::env::var("PATH").unwrap_or_default())
-                                .env("HOME", std::env::var("HOME").unwrap_or_default())
-                                .env("USER", std::env::var("USER").unwrap_or_default())
-                                .env(
-                                    "XDG_RUNTIME_DIR",
-                                    std::env::var("XDG_RUNTIME_DIR").unwrap_or_default(),
-                                )
-                                .env(
-                                    "WAYLAND_DISPLAY",
-                                    std::env::var("WAYLAND_DISPLAY").unwrap_or_default(),
-                                )
-                                .env("DISPLAY", std::env::var("DISPLAY").unwrap_or_default())
                                 .stdin(std::process::Stdio::null())
                                 .stdout(std::process::Stdio::null())
                                 .stderr(std::process::Stdio::null());
 
-                            if let Err(err) = cmd.spawn() {
-                                eprintln!("Failed to launch {exec}: {err}");
+                            match cmd.spawn() {
+                                Ok(_) => eprintln!("[nlauncher] Launched: {name}"),
+                                Err(err) => eprintln!("[nlauncher] Failed to launch {name} (exec: {exec}): {err}"),
                             }
                         });
 
@@ -204,17 +193,20 @@ impl Launcher {
                 }
                 SearchResult::Calculation(result) => {
                     if result != "Initializing calculator..." {
-                        if let Err(e) = std::process::Command::new("wl-copy").arg(result).output() {
-                            eprintln!("Failed to copy to clipboard: {e}");
+                        match std::process::Command::new("wl-copy").arg(result).output() {
+                            Ok(_) => eprintln!("[nlauncher] Copied to clipboard: {result}"),
+                            Err(e) => eprintln!("[nlauncher] Failed to copy to clipboard: {e}"),
                         }
                         cx.quit();
                     }
                 }
                 SearchResult::Process(process) => {
                     let pid = process.pid;
+                    let name = process.name.clone();
                     std::thread::spawn(move || {
-                        if let Err(e) = kill_process(pid) {
-                            eprintln!("Failed to kill process: {e}");
+                        match kill_process(pid) {
+                            Ok(_) => eprintln!("[nlauncher] Killed process: {name} (pid: {pid})"),
+                            Err(e) => eprintln!("[nlauncher] Failed to kill process {name} (pid: {pid}): {e}"),
                         }
                     });
                     cx.quit();
