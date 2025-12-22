@@ -12,7 +12,7 @@ mod calculator;
 mod fuzzy;
 mod process;
 mod state;
-use applications::load_applications;
+use applications::{load_from_cache, save_to_cache, scan_applications};
 use calculator::{is_calculator_query, Calculator};
 use fuzzy::FuzzyMatcher;
 use process::{get_running_processes, is_process_query, kill_process, ProcessInfo};
@@ -32,24 +32,62 @@ struct Launcher {
     query: SharedString,
     selected_index: usize,
     fuzzy_matcher: FuzzyMatcher,
-    calculator: Calculator,
+    calculator: Option<Calculator>,
     search_results: Vec<SearchResult>,
     scroll_offset: usize,
 }
 
 impl Launcher {
     fn new(cx: &mut Context<Self>) -> Self {
-        let applications = load_applications();
         let mut launcher = Self {
             focus_handle: cx.focus_handle(),
-            applications,
+            applications: Vec::new(),
             query: "".into(),
             selected_index: 0,
             fuzzy_matcher: FuzzyMatcher::new(),
-            calculator: Calculator::new(),
+            calculator: None,
             search_results: Vec::new(),
             scroll_offset: 0,
         };
+
+        // Chargement asynchrone des applications
+        cx.spawn(|view, mut cx| async move {
+            // 1. Charger le cache immédiatement (très rapide)
+            if let Some(apps) = load_from_cache() {
+                let _ = view.update(&mut cx, |this, cx| {
+                    this.applications = apps;
+                    this.update_search_results();
+                    cx.notify();
+                });
+            }
+
+            // 2. Scanner les applications en arrière-plan pour mettre à jour
+            let apps = scan_applications();
+            let _ = view.update(&mut cx, |this, cx| {
+                this.applications = apps.clone();
+                this.update_search_results();
+                cx.notify();
+            });
+
+            // 3. Sauvegarder le nouveau cache
+            let _ = save_to_cache(&apps);
+        })
+        .detach();
+
+        // Initialisation asynchrone de la calculatrice
+        cx.spawn(|view, mut cx| async move {
+            let calculator = Calculator::new();
+            let _ = view.update(&mut cx, |this, cx| {
+                this.calculator = Some(calculator);
+                // Si l'utilisateur a déjà tapé un calcul, on met à jour
+                if is_calculator_query(&this.query) {
+                    this.update_search_results();
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+
         launcher.update_search_results();
         launcher
     }
@@ -62,7 +100,6 @@ impl Launcher {
         if is_process_query(&query_str) {
             let processes = get_running_processes();
             if query_str == "ps" {
-                // Afficher tous les processus
                 for process in processes.into_iter().take(20) {
                     self.search_results.push(SearchResult::Process(process));
                 }
@@ -77,8 +114,12 @@ impl Launcher {
         }
         // Vérifier si c'est une requête de calcul
         else if is_calculator_query(&query_str) {
-            if let Some(result) = self.calculator.evaluate(&query_str) {
-                self.search_results.push(SearchResult::Calculation(result));
+            if let Some(calculator) = &mut self.calculator {
+                if let Some(result) = calculator.evaluate(&query_str) {
+                    self.search_results.push(SearchResult::Calculation(result));
+                }
+            } else {
+                self.search_results.push(SearchResult::Calculation("Initializing calculator...".to_string()));
             }
         }
         // Recherche fuzzy dans les applications
@@ -89,7 +130,6 @@ impl Launcher {
             }
         }
 
-        // Réinitialiser la sélection et le scroll
         self.selected_index = 0;
         self.scroll_offset = 0;
     }
@@ -162,11 +202,12 @@ impl Launcher {
                     }
                 }
                 SearchResult::Calculation(result) => {
-                    // Copier le résultat dans le presse-papiers
-                    if let Err(e) = std::process::Command::new("wl-copy").arg(result).output() {
-                        eprintln!("Failed to copy to clipboard: {e}");
+                    if result != "Initializing calculator..." {
+                        if let Err(e) = std::process::Command::new("wl-copy").arg(result).output() {
+                            eprintln!("Failed to copy to clipboard: {e}");
+                        }
+                        cx.quit();
                     }
-                    cx.quit();
                 }
                 SearchResult::Process(process) => {
                     let pid = process.pid;
@@ -225,9 +266,9 @@ impl Render for Launcher {
                 div()
                     .w(px(700.))
                     .max_h(px(500.))
-                    .bg(rgba(0x2e3440dd)) // polar night 0 avec plus d'opacité pour voir le blur
+                    .bg(rgba(0x2e3440dd))
                     .border_1()
-                    .border_color(rgba(0x88c0d033)) // frost1 à 20%
+                    .border_color(rgba(0x88c0d033))
                     .rounded_lg()
                     .shadow_lg()
                     .flex()
@@ -239,9 +280,9 @@ impl Render for Launcher {
                             .bg(rgb(0x3b4252))
                             .rounded_md()
                             .text_color(if query_text.is_empty() {
-                                rgba(0xd8dee966) // snow1 à 40%
+                                rgba(0xd8dee966)
                             } else {
-                                rgb(0xeceff4) // snow3
+                                rgb(0xeceff4)
                             })
                             .child(if query_text.is_empty() {
                                 "Search for apps and commands".to_string()
@@ -261,14 +302,14 @@ impl Render for Launcher {
                                     .flex()
                                     .items_center()
                                     .p_2()
-                                    .text_color(rgb(0xd8dee9)) // snow1
+                                    .text_color(rgb(0xd8dee9))
                                     .rounded_md()
                                     .hover(|style| style.bg(rgb(0x434c5e)));
 
                                 if original_index == selected_index {
                                     item = item
-                                        .bg(rgba(0x88c0d033)) // frost1 à 20%
-                                        .text_color(rgb(0x88c0d0)); // frost1 à 100%
+                                        .bg(rgba(0x88c0d033))
+                                        .text_color(rgb(0x88c0d0));
                                 }
 
                                 match result {
@@ -365,10 +406,8 @@ fn is_running() -> bool {
         return false;
     }
     
-    // Lire le PID du fichier lock
     if let Ok(pid_str) = fs::read_to_string(&lock_path) {
         if let Ok(pid) = pid_str.trim().parse::<i32>() {
-            // Vérifier si le processus existe
             return std::path::Path::new(&format!("/proc/{}", pid)).exists();
         }
     }
@@ -387,9 +426,7 @@ fn remove_lock() {
 }
 
 fn main() {
-    // Vérifier si une instance est déjà en cours
     if is_running() {
-        // Envoyer un signal pour fermer l'instance existante
         if let Ok(pid_str) = fs::read_to_string(get_lock_path()) {
             if let Ok(pid) = pid_str.trim().parse::<i32>() {
                 unsafe {
@@ -400,10 +437,8 @@ fn main() {
         std::process::exit(0);
     }
     
-    // Créer le lock
     create_lock();
     
-    // Nettoyer le lock à la sortie
     let _ = std::panic::catch_unwind(|| {
         Application::new().run(|cx: &mut App| {
         cx.on_action(|_: &Quit, cx| cx.quit());
@@ -447,6 +482,5 @@ fn main() {
         });
     });
     
-    // Nettoyer le lock
     remove_lock();
 }

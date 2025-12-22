@@ -14,49 +14,27 @@ fn get_cache_path() -> String {
     }
 }
 
-pub fn load_applications() -> Vec<ApplicationInfo> {
-    // Try to load from cache first
-    if let Ok(cached) = load_from_cache() {
-        return cached;
-    }
-
-    // Cache miss or invalid, scan applications
-    let applications = scan_applications();
-
-    // Save to cache in background
-    let apps_clone = applications.clone();
-    std::thread::spawn(move || {
-        let _ = save_to_cache(&apps_clone);
-    });
-
-    applications
-}
-
-fn load_from_cache() -> Result<Vec<ApplicationInfo>, Box<dyn std::error::Error>> {
+pub fn load_from_cache() -> Option<Vec<ApplicationInfo>> {
     let cache_path = get_cache_path();
     let cache_path = Path::new(&cache_path);
 
-    // Check if cache exists and is recent (less than 6 hours)
-    let metadata = fs::metadata(cache_path)?;
-    let cache_age = SystemTime::now().duration_since(metadata.modified()?)?;
-    if cache_age.as_secs() > 21600 {
-        return Err("Cache too old".into());
+    if !cache_path.exists() {
+        return None;
     }
 
-    let content = fs::read_to_string(cache_path)?;
-    let applications: Vec<ApplicationInfo> = serde_json::from_str(&content)?;
-
-    Ok(applications)
+    // On accepte un cache même un peu vieux pour la vitesse initiale
+    let content = fs::read_to_string(cache_path).ok()?;
+    serde_json::from_str(&content).ok()
 }
 
-fn save_to_cache(applications: &[ApplicationInfo]) -> Result<(), Box<dyn std::error::Error>> {
+pub fn save_to_cache(applications: &[ApplicationInfo]) -> Result<(), Box<dyn std::error::Error>> {
     let cache_path = get_cache_path();
     let content = serde_json::to_string(applications)?;
     fs::write(cache_path, content)?;
     Ok(())
 }
 
-fn scan_applications() -> Vec<ApplicationInfo> {
+pub fn scan_applications() -> Vec<ApplicationInfo> {
     use std::sync::{Arc, Mutex};
     use std::thread;
 
@@ -81,7 +59,6 @@ fn scan_applications() -> Vec<ApplicationInfo> {
                     if let Ok(desktop_entry) = DesktopEntry::decode(&path, &content) {
                         if let Some(name) = desktop_entry.name(None) {
                             if let Some(exec) = desktop_entry.exec() {
-                                // Check if already seen
                                 {
                                     let mut seen = seen_names.lock().unwrap();
                                     if seen.contains(&name.to_string()) {
@@ -95,7 +72,6 @@ fn scan_applications() -> Vec<ApplicationInfo> {
                                     .and_then(|icon_name| lookup(icon_name).with_size(24).find())
                                     .map(|p| p.to_string_lossy().to_string());
 
-                                // Nettoyer la commande exec des placeholders .desktop
                                 let exec_clean = exec
                                     .split_whitespace()
                                     .filter(|part| !part.starts_with('%'))
@@ -115,7 +91,6 @@ fn scan_applications() -> Vec<ApplicationInfo> {
                 }
             }
 
-            // Merge results
             let mut apps = applications.lock().unwrap();
             apps.extend(local_apps);
         });
@@ -123,7 +98,6 @@ fn scan_applications() -> Vec<ApplicationInfo> {
         handles.push(handle);
     }
 
-    // Wait for all threads
     for handle in handles {
         let _ = handle.join();
     }
