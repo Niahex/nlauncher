@@ -147,7 +147,7 @@ impl Launcher {
     }
 
     fn update_search_results(&mut self) {
-        // Annuler la recherche précédente si elle existe
+        // Cancel previous search if it exists
         self.search_task = None;
 
         let query_str = self.query.to_string();
@@ -436,7 +436,7 @@ impl Render for Launcher {
                 if event.keystroke.key == "space" {
                     let query = this.query.to_string();
 
-                    // Bloquer l'espace en mode ps
+                    // Block space in ps mode
                     if query.starts_with("ps") {
                         return;
                     }
@@ -612,7 +612,7 @@ impl Render for Launcher {
                                     .flex()
                                     .items_center()
                                     .p_2()
-                                    .text_color(self.theme.text_secondary) // snow1
+                                    .text_color(self.theme.text_secondary)
                                     .rounded_md()
                                     .hover(|style| style.bg(self.theme.bg_tertiary));
 
