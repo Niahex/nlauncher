@@ -39,6 +39,7 @@ struct Launcher {
     search_results: Vec<SearchResult>,
     scroll_offset: usize,
     vault_manager: VaultManager,
+    vault_unlocking: bool,
 }
 
 impl Launcher {
@@ -53,6 +54,7 @@ impl Launcher {
             search_results: Vec::new(),
             scroll_offset: 0,
             vault_manager: VaultManager::new(),
+            vault_unlocking: false,
         };
 
         if let Some(apps) = load_from_cache() {
@@ -229,6 +231,54 @@ impl Launcher {
     }
 
     fn launch(&mut self, _: &Launch, _: &mut Window, cx: &mut Context<Self>) {
+        let query_str = self.query.to_string();
+        
+        // Handle "pass {password}" - unlock vault on Enter
+        if query_str.starts_with("pass ") {
+            let rest = query_str.strip_prefix("pass ").unwrap_or("");
+            if !rest.contains(' ') && !rest.is_empty() && !self.vault_manager.is_unlocked() {
+                if self.vault_unlocking {
+                    return; // Already unlocking
+                }
+                
+                self.vault_unlocking = true;
+                self.search_results.clear();
+                self.search_results.push(SearchResult::Calculation("Unlocking vault...".to_string()));
+                cx.notify();
+                
+                let password = rest.to_string();
+                let vault_manager = self.vault_manager.clone();
+                
+                cx.spawn(async move |this, cx| {
+                    let result = background_executor().spawn(async move {
+                        vault_manager.unlock(&password)
+                    }).await;
+                    
+                    this.update(cx, |this, cx| {
+                        this.vault_unlocking = false;
+                        match result {
+                            Ok(entries) => {
+                                this.query = "pass ".into();
+                                this.search_results.clear();
+                                for entry in entries {
+                                    this.search_results.push(SearchResult::VaultEntry(entry));
+                                }
+                                this.selected_index = 0;
+                            }
+                            Err(e) => {
+                                this.search_results.clear();
+                                this.search_results.push(SearchResult::Calculation(
+                                    format!("❌ Wrong password or vault error: {}", e)
+                                ));
+                            }
+                        }
+                        cx.notify();
+                    })
+                }).detach();
+                return;
+            }
+        }
+        
         if let Some(result) = self.search_results.get(self.selected_index) {
             match result {
                 SearchResult::Application(app_index) => {
@@ -328,31 +378,27 @@ impl Render for Launcher {
             .items_center()
             .justify_center()
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _window, cx| {
-                match event.keystroke.key.as_str() {
-                    "space" => {
+                if event.keystroke.key == "space" {
+                    let mut query = this.query.to_string();
+                    query.push(' ');
+                    this.query = query.into();
+                    this.update_search_results();
+                    cx.notify();
+                } else if let Some(key_char) = &event.keystroke.key_char {
+                    let is_password_mode = this.query.starts_with("pass ") && !this.vault_manager.is_unlocked();
+                    let allowed = if is_password_mode {
+                        true
+                    } else {
+                        key_char.chars().all(|c| c.is_alphanumeric() || "+-*/()^.=".contains(c))
+                    };
+                    
+                    if allowed {
                         let mut query = this.query.to_string();
-                        query.push(' ');
+                        query.push_str(key_char);
                         this.query = query.into();
                         this.update_search_results();
                         cx.notify();
                     }
-                    key if key.len() == 1 => {
-                        if let Some(key_char) = key.chars().next() {
-                            let is_password_mode = this.query.starts_with("pass ");
-                            let allowed = key_char.is_alphanumeric() 
-                                || "+-*/()^.=".contains(key_char)
-                                || (is_password_mode && !key_char.is_control());
-                            
-                            if allowed {
-                                let mut query = this.query.to_string();
-                                query.push(key_char);
-                                this.query = query.into();
-                                this.update_search_results();
-                                cx.notify();
-                            }
-                        }
-                    }
-                    _ => {}
                 }
             }))
             .on_action(cx.listener(Self::backspace))
@@ -387,19 +433,8 @@ impl Render for Launcher {
                             .child(if query_text.is_empty() {
                                 "Search for apps and commands".to_string()
                             } else if query_text.starts_with("pass ") {
-                                let rest = query_text.strip_prefix("pass ").unwrap_or("");
-                                if rest.contains(' ') {
-                                    // "pass {password} {search}" - censor password
-                                    let parts: Vec<&str> = rest.splitn(2, ' ').collect();
-                                    let search = parts.get(1).unwrap_or(&"");
-                                    format!("pass {} {}", "•".repeat(parts[0].len()), search)
-                                } else if self.vault_manager.is_unlocked() {
-                                    // "pass {search}" - vault unlocked, show search
-                                    format!("pass {}", rest)
-                                } else {
-                                    // "pass {password}" - censor password
-                                    format!("pass {}", "•".repeat(rest.len()))
-                                }
+                                // TODO: remettre le censored
+                                query_text.clone()
                             } else {
                                 query_text.clone()
                             }),

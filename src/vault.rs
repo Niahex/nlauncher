@@ -45,6 +45,14 @@ pub struct VaultManager {
     session_file: PathBuf,
 }
 
+impl Clone for VaultManager {
+    fn clone(&self) -> Self {
+        Self {
+            session_file: self.session_file.clone(),
+        }
+    }
+}
+
 impl VaultManager {
     pub fn new() -> Self {
         let session_file = std::env::temp_dir().join("nlauncher_vault_session");
