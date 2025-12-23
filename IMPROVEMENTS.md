@@ -54,7 +54,7 @@
 - [ ] Add integration tests
 
 ## 📝 Documentation
-- [ ] Add screenshots to README
+- [ ] Add screenshots and video/gif to README
 - [ ] Create user guide
 - [ ] Document all keyboard shortcuts
 - [ ] Add troubleshooting section
