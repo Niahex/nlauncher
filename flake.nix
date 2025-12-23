@@ -8,14 +8,7 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-    crane,
-    rust-overlay,
-    ...
-  }:
+  outputs = {self, nixpkgs, flake-utils, crane, rust-overlay, ...}:
     flake-utils.lib.eachDefaultSystem (
       system: let
         # Overlays and package set
@@ -46,41 +39,47 @@
         };
 
         # Dependencies for building the application
-        buildInputs = with pkgs; [
-          wayland
-          vulkan-loader
-          vulkan-validation-layers
-          vulkan-tools
-          mesa
-          xorg.libxcb
-          xorg.libX11
-          libxkbcommon
-          fontconfig
-          dbus
-          openssl
-          freetype
-          expat
-          nerd-fonts.ubuntu-mono
-          nerd-fonts.ubuntu-sans
-          nerd-fonts.ubuntu
-          noto-fonts-emoji
-          libsecret
-        ];
+        buildInputs = with pkgs;
+          [
+            wayland
+            vulkan-loader
+            vulkan-validation-layers
+            vulkan-tools
+            mesa
+            xorg.libxcb
+            xorg.libX11
+            libxkbcommon
+            fontconfig
+            dbus
+            openssl
+            freetype
+            expat
+            nerd-fonts.ubuntu-mono
+            nerd-fonts.ubuntu-sans
+            nerd-fonts.ubuntu
+            noto-fonts-emoji
+            libsecret
+          ];
 
         # Dependencies needed only at runtime
-        runtimeDependencies = with pkgs; [
-          wayland
-          vulkan-loader
-          mesa
-          libxkbcommon
-          wl-clipboard
-        ];
+        runtimeDependencies = with pkgs;
+          [
+            wayland
+            vulkan-loader
+            mesa
+            libglvnd
+            libxkbcommon
+            wl-clipboard
+            xorg.libX11
+            xorg.libxcb
+          ];
 
-        nativeBuildInputs = with pkgs; [
-          pkg-config
-          makeWrapper
-          autoPatchelfHook
-        ];
+        nativeBuildInputs = with pkgs;
+          [
+            pkg-config
+            makeWrapper
+            autoPatchelfHook
+          ];
 
         envVars = {
           RUST_BACKTRACE = "full";
@@ -101,18 +100,20 @@
 
           postInstall = ''
             wrapProgram $out/bin/nlauncher \
-              --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath runtimeDependencies}
+              --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath runtimeDependencies} \
+              --suffix LD_LIBRARY_PATH : /run/opengl/driver/lib:/run/opengl/lib
           '';
         };
 
         # Development shell tools
-        devTools = with pkgs; [
-          rust-analyzer
-          rustToolchain
-          cargo-watch
-          cargo-edit
-          bacon
-        ];
+        devTools = with pkgs;
+          [
+            rust-analyzer
+            rustToolchain
+            cargo-watch
+            cargo-edit
+            bacon
+          ];
       in {
         packages = {
           default = nlauncher;

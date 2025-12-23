@@ -52,6 +52,7 @@
 - [ ] Add logging system
 - [ ] Write unit tests for core functionality
 - [ ] Add integration tests
+- [ ] Cachix https://app.cachix.org/cache/nlauncher#pull
 
 ## 📝 Documentation
 - [ ] Add screenshots and video/gif to README
