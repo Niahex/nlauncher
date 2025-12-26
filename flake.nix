@@ -8,7 +8,18 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
-  outputs = {self, nixpkgs, flake-utils, crane, rust-overlay, ...}:
+  nixConfig = {
+    extra-substituters = [
+      "https://nix-community.cachix.org"
+      "https://cache.nixos.org"
+    ];
+    extra-trusted-public-keys = [
+      "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+    ];
+  };
+
+  outputs = { self, nixpkgs, flake-utils, crane, rust-overlay, ... }:
     flake-utils.lib.eachDefaultSystem (
       system: let
         # Overlays and package set
@@ -39,47 +50,40 @@
         };
 
         # Dependencies for building the application
-        buildInputs = with pkgs;
-          [
-            wayland
-            vulkan-loader
-            vulkan-validation-layers
-            vulkan-tools
-            mesa
-            xorg.libxcb
-            xorg.libX11
-            libxkbcommon
-            fontconfig
-            dbus
-            openssl
-            freetype
-            expat
-            nerd-fonts.ubuntu-mono
-            nerd-fonts.ubuntu-sans
-            nerd-fonts.ubuntu
-            noto-fonts-emoji
-            libsecret
-          ];
+        buildInputs = with pkgs; [
+          wayland
+          vulkan-loader
+          vulkan-validation-layers
+          vulkan-tools
+          mesa
+          xorg.libxcb
+          xorg.libX11
+          libxkbcommon
+          fontconfig
+          dbus
+          openssl
+          freetype
+          expat
+          nerd-fonts.ubuntu-mono
+          nerd-fonts.ubuntu-sans
+          nerd-fonts.ubuntu
+          noto-fonts-emoji
+          libsecret
+        ];
 
         # Dependencies needed only at runtime
-        runtimeDependencies = with pkgs;
-          [
-            wayland
-            vulkan-loader
-            mesa
-            libglvnd
-            libxkbcommon
-            wl-clipboard
-            xorg.libX11
-            xorg.libxcb
-          ];
+        runtimeDependencies = with pkgs; [
+          wayland
+          vulkan-loader
+          mesa
+          libxkbcommon
+        ];
 
-        nativeBuildInputs = with pkgs;
-          [
-            pkg-config
-            makeWrapper
-            autoPatchelfHook
-          ];
+        nativeBuildInputs = with pkgs; [
+          pkg-config
+          makeWrapper
+          autoPatchelfHook
+        ];
 
         envVars = {
           RUST_BACKTRACE = "full";
@@ -100,20 +104,18 @@
 
           postInstall = ''
             wrapProgram $out/bin/nlauncher \
-              --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath runtimeDependencies} \
-              --suffix LD_LIBRARY_PATH : /run/opengl/driver/lib:/run/opengl/lib
+              --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath runtimeDependencies}
           '';
         };
 
         # Development shell tools
-        devTools = with pkgs;
-          [
-            rust-analyzer
-            rustToolchain
-            cargo-watch
-            cargo-edit
-            bacon
-          ];
+        devTools = with pkgs; [
+          rust-analyzer
+          rustToolchain
+          cargo-watch
+          cargo-edit
+          bacon
+        ];
       in {
         packages = {
           default = nlauncher;
@@ -139,7 +141,8 @@
           nativeBuildInputs = devTools;
           env = envVars;
 
-          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath (buildInputs ++ runtimeDependencies)}:/run/opengl/driver/lib:/run/opengl/lib";
+          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath (buildInputs ++ runtimeDependencies)}:/run/opengl-driver/lib";
+          VK_ICD_FILENAMES = "/run/opengl-driver/share/vulkan/icd.d/nvidia_icd.x86_64.json:/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json:/run/opengl-driver/share/vulkan/icd.d/intel_icd.x86_64.json";
           FONTCONFIG_FILE = pkgs.makeFontsConf {fontDirectories = buildInputs;};
 
           shellHook = ''
