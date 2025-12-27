@@ -1,6 +1,7 @@
 pub mod applications;
-pub mod calculator;
-pub mod fuzzy;
-pub mod process;
+pub mod cache;
+pub mod events;
+pub mod launcher;
 pub mod state;
-pub mod theme;
+pub mod styles;
+pub mod ui;

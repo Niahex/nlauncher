@@ -1,107 +1,105 @@
-use crate::state::ApplicationInfo;
-use freedesktop_desktop_entry::{DesktopEntry, Iter};
-use freedesktop_icons::lookup;
+use gtk::{gio, prelude::*};
+use crate::cache;
+use std::env;
+use std::path::PathBuf;
+use walkdir::WalkDir;
+use log::{info, warn};
 use std::collections::HashSet;
-use std::fs;
-use std::path::Path;
 
-fn get_cache_path() -> String {
-    if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
-        format!("{runtime_dir}/nlauncher_cache.json")
-    } else {
-        "/tmp/nlauncher_cache.json".to_string()
-    }
-}
+pub struct Applications;
 
-pub fn load_from_cache() -> Option<Vec<ApplicationInfo>> {
-    let cache_path = get_cache_path();
-    let cache_path = Path::new(&cache_path);
+impl Applications {
+    fn find_desktop_files() -> Vec<PathBuf> {
+        let mut desktop_files = HashSet::new();
+        let mut data_dirs = Vec::new();
 
-    if !cache_path.exists() {
-        return None;
-    }
-
-    // Accept even slightly old cache for initial speed
-    let content = fs::read_to_string(cache_path).ok()?;
-    serde_json::from_str(&content).ok()
-}
-
-pub fn save_to_cache(applications: &[ApplicationInfo]) -> Result<(), Box<dyn std::error::Error>> {
-    let cache_path = get_cache_path();
-    let content = serde_json::to_string(applications)?;
-    fs::write(cache_path, content)?;
-    Ok(())
-}
-
-pub fn scan_applications() -> Vec<ApplicationInfo> {
-    use std::sync::{Arc, Mutex};
-    use std::thread;
-
-    let applications = Arc::new(Mutex::new(Vec::new()));
-    let seen_names = Arc::new(Mutex::new(HashSet::new()));
-
-    let paths: Vec<_> = Iter::new(freedesktop_desktop_entry::default_paths()).collect();
-    let chunk_size = (paths.len() / 4).max(1);
-
-    let mut handles = Vec::new();
-
-    for chunk in paths.chunks(chunk_size) {
-        let chunk = chunk.to_vec();
-        let applications = Arc::clone(&applications);
-        let seen_names = Arc::clone(&seen_names);
-
-        let handle = thread::spawn(move || {
-            let mut local_apps = Vec::new();
-
-            for path in chunk {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    if let Ok(desktop_entry) = DesktopEntry::decode(&path, &content) {
-                        if let Some(name) = desktop_entry.name(None) {
-                            if let Some(exec) = desktop_entry.exec() {
-                                {
-                                    let mut seen = seen_names.lock().unwrap();
-                                    if seen.contains(&name.to_string()) {
-                                        continue;
-                                    }
-                                    seen.insert(name.to_string());
-                                }
-
-                                let icon_path = desktop_entry
-                                    .icon()
-                                    .and_then(|icon_name| lookup(icon_name).with_size(24).find())
-                                    .map(|p| p.to_string_lossy().to_string());
-
-                                let exec_clean = exec
-                                    .split_whitespace()
-                                    .filter(|part| !part.starts_with('%'))
-                                    .collect::<Vec<_>>()
-                                    .join(" ");
-
-                                local_apps.push(ApplicationInfo {
-                                    name: name.to_string(),
-                                    name_lower: name.to_lowercase(),
-                                    exec: exec_clean,
-                                    icon: desktop_entry.icon().map(|s| s.to_string()),
-                                    icon_path,
-                                });
-                            }
-                        }
-                    }
+        if let Ok(xdg_data_dirs) = env::var("XDG_DATA_DIRS") {
+            info!("Using XDG_DATA_DIRS: {}", xdg_data_dirs);
+            data_dirs.extend(xdg_data_dirs.split(':').map(String::from));
+        } else {
+            warn!("XDG_DATA_DIRS not set. Falling back to default paths.");
+            if let Some(home_dir) = dirs::home_dir() {
+                if let Some(local_share) = home_dir.join(".local/share").to_str() {
+                    data_dirs.push(local_share.to_string());
                 }
             }
+            data_dirs.push("/usr/share".to_string());
+            data_dirs.push("/usr/local/share".to_string());
+            data_dirs.push("/run/current-system/sw/share/applications".to_string());
+        }
 
-            let mut apps = applications.lock().unwrap();
-            apps.extend(local_apps);
-        });
+        for data_dir in data_dirs {
+            let path = PathBuf::from(data_dir);
+            let app_dir = if path.file_name().and_then(|s| s.to_str()) == Some("applications") {
+                path
+            } else {
+                path.join("applications")
+            };
 
-        handles.push(handle);
+            if app_dir.is_dir() {
+                info!("Scanning for applications in: {:?}", app_dir);
+                for entry in WalkDir::new(&app_dir)
+                    .into_iter()
+                    .filter_map(Result::ok)
+                    .filter(|e| e.file_type().is_file() && e.path().extension().and_then(|s| s.to_str()) == Some("desktop"))
+                {
+                    desktop_files.insert(entry.path().to_path_buf());
+                }
+            }
+        }
+        
+        let mut sorted_files: Vec<_> = desktop_files.into_iter().collect();
+        sorted_files.sort();
+        sorted_files
     }
 
-    for handle in handles {
-        let _ = handle.join();
+    pub fn get_cached_applications() -> gio::ListStore {
+        let app_list_store = gio::ListStore::new::<gio::AppInfo>();
+        if let Some(app_ids) = cache::load_from_cache::<Vec<String>>() {
+            info!("Loading applications from cache.");
+            for id in app_ids {
+                if let Some(desktop_app_info) = gio::DesktopAppInfo::new(&id) {
+                    let app_info = desktop_app_info.upcast::<gio::AppInfo>();
+                    app_list_store.append(&app_info);
+                }
+            }
+        }
+        app_list_store
     }
 
-    let mut applications = Arc::try_unwrap(applications).unwrap().into_inner().unwrap();
-    applications.sort_by(|a, b| a.name.cmp(&b.name));
-    applications
+    pub fn scan_for_applications() -> Vec<String> {
+        info!("Scanning system for applications.");
+        let mut app_ids = HashSet::new();
+
+        // Method 1: Standard GIO scan
+        info!("Scanning with gio::AppInfo::all()");
+        let all_apps = gio::AppInfo::all();
+        for app_info in all_apps {
+            if app_info.should_show() {
+                if let Some(id) = app_info.id() {
+                    app_ids.insert(id.to_string());
+                }
+            }
+        }
+
+        // Method 2: Manual scan of XDG_DATA_DIRS
+        info!("Performing manual scan of XDG_DATA_DIRS.");
+        let desktop_files = Self::find_desktop_files();
+        for file_path in desktop_files {
+            if let Some(app_info) = gio::DesktopAppInfo::from_filename(&file_path) {
+                let app = app_info.upcast::<gio::AppInfo>();
+                if app.should_show() {
+                    if let Some(id) = app.id() {
+                        app_ids.insert(id.to_string());
+                    }
+                }
+            } else {
+                warn!("Could not create AppInfo from file: {:?}", file_path);
+            }
+        }
+        
+        let mut sorted_app_ids: Vec<_> = app_ids.into_iter().collect();
+        sorted_app_ids.sort();
+        sorted_app_ids
+    }
 }

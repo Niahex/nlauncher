@@ -1,5 +1,5 @@
 {
-  description = "nlauncher - A GPUI-based application launcher";
+  description = "nlauncher - A GTK-based application launcher for Wayland";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -8,18 +8,14 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
-  nixConfig = {
-    extra-substituters = [
-      "https://nix-community.cachix.org"
-      "https://cache.nixos.org"
-    ];
-    extra-trusted-public-keys = [
-      "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
-      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-    ];
-  };
-
-  outputs = { self, nixpkgs, flake-utils, crane, rust-overlay, ... }:
+  outputs = {
+    self,
+    nixpkgs,
+    flake-utils,
+    crane,
+    rust-overlay,
+    ...
+  }:
     flake-utils.lib.eachDefaultSystem (
       system: let
         # Overlays and package set
@@ -32,57 +28,24 @@
         };
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+        src = craneLib.cleanCargoSource ./.;
 
-        unfilteredRoot = ./.;
-        src = pkgs.lib.fileset.toSource {
-          root = unfilteredRoot;
-          fileset = pkgs.lib.fileset.unions [
-            (craneLib.fileset.commonCargoSources unfilteredRoot)
-            (pkgs.lib.fileset.fileFilter (
-                file:
-                  pkgs.lib.any file.hasExt [
-                    "svg"
-                  ]
-              )
-              unfilteredRoot)
-            (pkgs.lib.fileset.maybeMissing ./assets)
-          ];
-        };
-
-        # Dependencies for building the application
+        # Common dependencies
         buildInputs = with pkgs; [
+          gtk4
+          gtk4-layer-shell
+          glib
+          pango
+          gdk-pixbuf
           wayland
-          vulkan-loader
-          vulkan-validation-layers
-          vulkan-tools
-          mesa
-          xorg.libxcb
-          xorg.libX11
-          libxkbcommon
-          fontconfig
+          wayland-protocols
           dbus
-          openssl
-          freetype
-          expat
-          nerd-fonts.ubuntu-mono
-          nerd-fonts.ubuntu-sans
-          nerd-fonts.ubuntu
-          noto-fonts-emoji
-          libsecret
-        ];
-
-        # Dependencies needed only at runtime
-        runtimeDependencies = with pkgs; [
-          wayland
-          vulkan-loader
-          mesa
-          libxkbcommon
         ];
 
         nativeBuildInputs = with pkgs; [
           pkg-config
           makeWrapper
-          autoPatchelfHook
+          wrapGAppsHook4
         ];
 
         envVars = {
@@ -101,11 +64,6 @@
           env = envVars;
           pname = "nlauncher";
           version = "0.1.0";
-
-          postInstall = ''
-            wrapProgram $out/bin/nlauncher \
-              --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath runtimeDependencies}
-          '';
         };
 
         # Development shell tools
@@ -121,8 +79,6 @@
           default = nlauncher;
           inherit nlauncher;
         };
-
-        homeManagerModules.default = import ./nix/home-manager.nix;
 
         checks = {
           inherit nlauncher;
@@ -141,15 +97,8 @@
           nativeBuildInputs = devTools;
           env = envVars;
 
-          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath (buildInputs ++ runtimeDependencies)}:/run/opengl-driver/lib";
-          VK_ICD_FILENAMES = "/run/opengl-driver/share/vulkan/icd.d/nvidia_icd.x86_64.json:/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json:/run/opengl-driver/share/vulkan/icd.d/intel_icd.x86_64.json";
-          FONTCONFIG_FILE = pkgs.makeFontsConf {fontDirectories = buildInputs;};
-
           shellHook = ''
             echo "[🦀 Rust $(rustc --version)] - Ready to develop nlauncher!"
-            echo "Vulkan ICD: $VK_ICD_FILENAMES"
-            echo "Available Vulkan devices:"
-            vulkaninfo --summary 2>/dev/null | grep -A 2 "GPU" || echo "  Run 'vulkaninfo' for details"
           '';
         };
 
