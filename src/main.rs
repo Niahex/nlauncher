@@ -81,14 +81,12 @@ fn main() {
         });
 
         glib::idle_add_local(move || {
-            if let Ok(app_ids) = rx.try_recv() {
+            if let Ok(new_app_ids) = rx.try_recv() {
                 let cached_app_ids: HashSet<String> = app_list_store
                     .iter::<gio::AppInfo>()
                     .filter_map(|app_info| app_info.ok())
                     .filter_map(|app_info| app_info.id().map(|s| s.to_string()))
                     .collect();
-
-                let new_app_ids: HashSet<String> = app_ids.iter().cloned().collect();
 
                 // Add new apps
                 for id in new_app_ids.difference(&cached_app_ids) {
@@ -114,8 +112,11 @@ fn main() {
                     app_list_store.remove(i);
                 }
                 
-                // Save to cache
-                if let Err(e) = cache::save_to_cache(&app_ids) {
+                // Save to cache (sorted for stability)
+                let mut sorted_ids: Vec<_> = new_app_ids.into_iter().collect();
+                sorted_ids.sort();
+                
+                if let Err(e) = cache::save_to_cache(&sorted_ids) {
                     eprintln!("Failed to save app cache: {}", e);
                 }
 
