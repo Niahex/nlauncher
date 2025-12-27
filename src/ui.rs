@@ -50,6 +50,9 @@ pub fn build_ui(app: &Application) -> LauncherUi {
         let hbox = Box::new(Orientation::Horizontal, 5);
         let icon = gtk::Image::new();
         icon.set_css_classes(&["icon"]);
+        // Optimization: Set fixed icon size to avoid resize calculations during scroll
+        icon.set_pixel_size(32);
+        
         let label = Label::new(None);
         hbox.append(&icon);
         hbox.append(&label);

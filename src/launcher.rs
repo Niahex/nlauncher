@@ -13,10 +13,9 @@ pub struct Launcher {
 impl Launcher {
     pub fn new(app: &Application, app_list_store: gio::ListStore) -> Self {
         let ui = build_ui(app);
-        let state = {
-            let search_entry = ui.search_entry.clone();
-            LauncherState::new(app_list_store, move || search_entry.text().to_string())
-        };
+        
+        // No closure needed anymore, state handles its own search query
+        let state = LauncherState::new(app_list_store);
 
         ui.list_view.set_model(Some(&state.selection_model));
         connect_events(&ui, &state, app);

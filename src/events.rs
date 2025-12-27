@@ -5,8 +5,14 @@ use crate::state::LauncherState;
 pub fn connect_events(ui: &LauncherUi, state: &LauncherState, app: &Application) {
     let app_filter = state.app_filter.clone();
     let selection_model = state.selection_model.clone();
-    ui.search_entry.connect_changed(move |_| {
+    let search_query = state.search_query.clone();
+    
+    ui.search_entry.connect_changed(move |entry| {
+        // Update the shared search query once per change event
+        *search_query.borrow_mut() = entry.text().to_lowercase();
+        
         app_filter.changed(gtk::FilterChange::Different);
+        
         let selection_model = selection_model.clone();
         glib::idle_add_local_once(move || {
             if selection_model.n_items() > 0 {
@@ -85,4 +91,3 @@ pub fn launch_selected_app(app: &Application, selection_model: &SingleSelection)
     }
     false
 }
-
