@@ -19,7 +19,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.contains(&"--refresh".to_string()) {
         if let Err(e) = cache::clear_cache() {
-            eprintln!("Failed to clear cache: {}", e);
+            eprintln!("Failed to clear cache: {e}");
         }
     }
 
@@ -117,7 +117,7 @@ fn main() {
                 sorted_ids.sort();
                 
                 if let Err(e) = cache::save_to_cache(&sorted_ids) {
-                    eprintln!("Failed to save app cache: {}", e);
+                    eprintln!("Failed to save app cache: {e}");
                 }
 
                 return glib::ControlFlow::Break;

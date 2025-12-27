@@ -83,7 +83,7 @@ pub fn launch_selected_app(app: &Application, selection_model: &SingleSelection)
                     return true;
                 },
                 Err(e) => {
-                    eprintln!("Error launching application: {}", e);
+                    eprintln!("Error launching application: {e}");
                     return false;
                 }
             }

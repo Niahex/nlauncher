@@ -39,7 +39,7 @@ pub fn save_to_cache<T: Serialize>(data: &T) -> Result<(), std::io::Error> {
 pub fn clear_cache() -> Result<(), std::io::Error> {
     if let Ok(path) = get_cache_file_path() {
         if path.exists() {
-            info!("Clearing cache file at: {:?}", path);
+            info!("Clearing cache file at: {path:?}");
             fs::remove_file(path)?;
         }
     }
