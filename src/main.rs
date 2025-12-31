@@ -102,6 +102,7 @@ impl Launcher {
 
         if let Some(apps) = load_from_cache() {
             launcher.applications = apps;
+            launcher.fuzzy_matcher.set_candidates(&launcher.applications);
             launcher.update_search_results();
         }
 
@@ -112,6 +113,7 @@ impl Launcher {
 
             this.update(cx, |this, cx| {
                 this.applications = apps.clone();
+                this.fuzzy_matcher.set_candidates(&this.applications);
                 this.update_search_results();
                 cx.notify();
             })?;
@@ -208,7 +210,12 @@ impl Launcher {
                     ));
                 }
             } else {
-                let app_indices = self.fuzzy_matcher.search(&query_str, &self.applications);
+                let app_indices = if query_str.is_empty() {
+                    (0..self.applications.len()).collect()
+                } else {
+                    self.fuzzy_matcher.search(&query_str)
+                };
+
                 for index in app_indices.into_iter().take(50) {
                     self.search_results.push(SearchResult::Application(index));
                 }

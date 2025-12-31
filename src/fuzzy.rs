@@ -18,27 +18,28 @@ impl FuzzyMatcher {
         Self { matcher }
     }
 
-    pub fn search(&mut self, query: &str, apps: &[ApplicationInfo]) -> Vec<usize> {
-        if query.is_empty() {
-            return (0..apps.len()).collect();
-        }
+    pub fn set_candidates(&mut self, apps: &[ApplicationInfo]) {
+        // Clear previous items and reset
+        self.matcher.restart(true);
 
-        // Reset the matcher
-        self.matcher.restart(false);
-
-        // Inject the applications
         let injector = self.matcher.injector();
         for (i, app) in apps.iter().enumerate() {
             let name = Utf32String::from(app.name.as_str());
             let _ = injector.push(i, |cols| cols[0] = name.clone());
         }
+    }
 
-        // Parse the pattern and start the search
-        let _pattern = nucleo::pattern::Pattern::parse(
-            query,
-            nucleo::pattern::CaseMatching::Ignore,
-            nucleo::pattern::Normalization::Smart,
-        );
+    pub fn search(&mut self, query: &str) -> Vec<usize> {
+        if query.is_empty() {
+            // Return all items if query is empty (limited by caller usually, but here we return all indices)
+            // Ideally we'd know the count, but we can't easily get it from Nucleo without a snapshot.
+            // Since the caller (main.rs) has the apps vector, they handle the "empty query" case 
+            // usually by not calling search or taking all. 
+            // But if they call search with empty string, Nucleo pattern matching might return everything if configured?
+            // Let's rely on the pattern.
+        }
+
+        // Parse the pattern and update
         self.matcher.pattern.reparse(
             0,
             query,
@@ -47,7 +48,7 @@ impl FuzzyMatcher {
             false,
         );
 
-        // Wait for matching to complete
+        // Wait a bit for matching to complete (running in background threads managed by Nucleo)
         self.matcher.tick(10);
 
         // Get the results
